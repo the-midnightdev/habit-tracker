@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "habit-tracker"
+version = "0.1.0"
+description = "Single-user CLI habit tracker"
+requires-python = ">=3.13"
+dependencies = ["rich>=13.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+habit = "habit:main"
+
+[tool.setuptools]
+py-modules = ["habit", "habit_core"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
