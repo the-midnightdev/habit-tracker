@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 DATA_FILENAME = "data.json"
@@ -49,3 +49,42 @@ class DataStore:
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         backup = self.path.with_name(f"{DATA_FILENAME}.corrupt-{timestamp}")
         self.path.rename(backup)
+
+
+def _parse(d: str) -> date:
+    return date.fromisoformat(d)
+
+
+def current_streak(completions: list[str], today: date | None = None) -> int:
+    """Count consecutive days back from today (or yesterday if today not done)."""
+    today = today or date.today()
+    done = {_parse(c) for c in completions if _parse(c) <= today}
+    cursor = today if today in done else today - timedelta(days=1)
+    streak = 0
+    while cursor in done:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return streak
+
+
+def longest_streak(completions: list[str]) -> int:
+    """Length of the longest run of consecutive dates in completions."""
+    if not completions:
+        return 0
+    days = sorted({_parse(c) for c in completions})
+    best = current = 1
+    for prev, curr in zip(days, days[1:]):
+        if (curr - prev).days == 1:
+            current += 1
+            best = max(best, current)
+        else:
+            current = 1
+    return best
+
+
+def completion_pct_30d(completions: list[str], today: date | None = None) -> int:
+    """Percent of the last 30 days (inclusive of today) that have a completion."""
+    today = today or date.today()
+    window_start = today - timedelta(days=29)  # 30-day inclusive window
+    hits = sum(1 for c in completions if window_start <= _parse(c) <= today)
+    return round(hits / 30 * 100)
