@@ -19,6 +19,15 @@ class ValidationError(ValueError):
     """Raised when a block fails validation (format, ordering, overlap, duplicate)."""
 
 
+def validate_times(start: str, end: str) -> None:
+    """Raise ValidationError unless start and end are HH:MM and start < end."""
+    for value in (start, end):
+        if not _TIME_RE.match(value):
+            raise ValidationError(f"invalid time {value!r}; expected HH:MM (24h)")
+    if start >= end:
+        raise ValidationError(f"start {start!r} must be before end {end!r}")
+
+
 @dataclass
 class TemplateBlock:
     start: str
