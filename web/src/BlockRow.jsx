@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
+import { Check, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+const STATE_RING = {
+  done: "border-l-primary",
+  skipped: "border-l-destructive",
+  pending: "border-l-border",
+};
 
 export default function BlockRow({ block, onMark }) {
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(block.label);
 
-  // Re-sync the editable label when the block prop changes (the parent reuses
-  // this instance across refreshes because the key is stable).
   useEffect(() => {
     setLabel(block.label);
   }, [block.label]);
@@ -13,21 +21,24 @@ export default function BlockRow({ block, onMark }) {
   const toggle = (target) =>
     onMark(block.start, { state: block.state === target ? "pending" : target });
 
-  // Submission goes through onBlur only; Enter just blurs the input, so a single
-  // keypress can't fire submitLabel twice (keydown + the resulting blur).
   const submitLabel = () => {
     setEditing(false);
     if (label !== block.label) onMark(block.start, { label });
   };
 
   return (
-    <div className={`block block--${block.state}`}>
-      <span className="block__time">
+    <div
+      className={cn(
+        "flex items-center gap-3 border-l-4 rounded-md bg-card px-3 py-2",
+        STATE_RING[block.state]
+      )}
+    >
+      <span className="w-[104px] shrink-0 tabular-nums text-sm text-muted-foreground">
         {block.start}–{block.end}
       </span>
       {editing ? (
-        <input
-          className="block__label-input"
+        <Input
+          className="h-8 flex-1"
           value={label}
           autoFocus
           onChange={(e) => setLabel(e.target.value)}
@@ -35,24 +46,26 @@ export default function BlockRow({ block, onMark }) {
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
         />
       ) : (
-        <span className="block__label" onClick={() => setEditing(true)}>
+        <span className="flex-1 cursor-text text-sm" onClick={() => setEditing(true)}>
           {block.label}
         </span>
       )}
-      <span className="block__actions">
-        <button
-          aria-pressed={block.state === "done"}
-          onClick={() => toggle("done")}
-        >
-          Done
-        </button>
-        <button
-          aria-pressed={block.state === "skipped"}
-          onClick={() => toggle("skipped")}
-        >
-          Skip
-        </button>
-      </span>
+      <Button
+        size="sm"
+        variant={block.state === "done" ? "default" : "outline"}
+        aria-pressed={block.state === "done"}
+        onClick={() => toggle("done")}
+      >
+        <Check className="mr-1 h-4 w-4" /> Done
+      </Button>
+      <Button
+        size="sm"
+        variant={block.state === "skipped" ? "destructive" : "outline"}
+        aria-pressed={block.state === "skipped"}
+        onClick={() => toggle("skipped")}
+      >
+        <X className="mr-1 h-4 w-4" /> Skip
+      </Button>
     </div>
   );
 }
