@@ -219,3 +219,35 @@ def test_history_dates_sorted():
     set_block_state(data, "2026-05-25", "08:00", "done")
     set_block_state(data, "2026-05-24", "08:00", "done")
     assert history_dates(data) == ["2026-05-24", "2026-05-25"]
+
+
+from core import resolve_block_start
+
+
+def test_resolve_block_start_by_explicit_hhmm():
+    blocks = get_day_blocks(_template_data(), "2026-05-24")
+    assert resolve_block_start(blocks, "09:00") == "09:00"
+
+
+def test_resolve_block_start_by_bare_hour():
+    blocks = get_day_blocks(_template_data(), "2026-05-24")
+    assert resolve_block_start(blocks, "8") == "08:00"
+
+
+def test_resolve_block_start_by_row_number_when_no_hour_match():
+    blocks = get_day_blocks(_template_data(), "2026-05-24")
+    # Row 2 is the 09:00 block; "2" is not a start hour here, so it means the row.
+    assert resolve_block_start(blocks, "2") == "09:00"
+
+
+def test_resolve_block_start_prefers_hour_over_row():
+    blocks = get_day_blocks(_template_data(), "2026-05-24")
+    # "8" matches the 08:00 start hour; it must NOT be read as row 8.
+    assert resolve_block_start(blocks, "8") == "08:00"
+
+
+def test_resolve_block_start_unknown_returns_none():
+    blocks = get_day_blocks(_template_data(), "2026-05-24")
+    assert resolve_block_start(blocks, "23:00") is None
+    assert resolve_block_start(blocks, "99") is None
+    assert resolve_block_start(blocks, "garbage") is None

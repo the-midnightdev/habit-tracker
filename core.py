@@ -208,3 +208,25 @@ def set_block_label(data: PlannerData, date_iso: str, start: str, label: str) ->
 
 def history_dates(data: PlannerData) -> list[str]:
     return sorted(data.days.keys())
+
+
+def resolve_block_start(blocks: list[DayBlock], ref: str) -> str | None:
+    """Resolve a user reference to a block's start time.
+
+    Resolution order (start time wins over row number):
+      1. Exact HH:MM match against a block start.
+      2. Bare hour (e.g. "8" -> "08:00") match against a block start.
+      3. 1-based row number into the (already sorted) blocks list.
+    Returns the matched start string, or None if nothing matches.
+    """
+    starts = [b.start for b in blocks]
+    if ref in starts:
+        return ref
+    if ref.isdigit():
+        hhmm = f"{int(ref):02d}:00"
+        if hhmm in starts:
+            return hhmm
+        row = int(ref)
+        if 1 <= row <= len(blocks):
+            return blocks[row - 1].start
+    return None
