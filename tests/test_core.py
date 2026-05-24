@@ -263,3 +263,36 @@ def test_resolve_block_start_unknown_returns_none():
     assert resolve_block_start(blocks, "23:00") is None
     assert resolve_block_start(blocks, "99") is None
     assert resolve_block_start(blocks, "garbage") is None
+
+
+def test_v2_file_is_migrated_to_overrides(data_dir: Path):
+    # A v2 file with a done block and a stale (no-longer-in-template) pending block.
+    (data_dir / "data.json").write_text(json.dumps({
+        "version": 2,
+        "template": [{"start": "13:00", "end": "14:00", "label": "break"}],
+        "days": {
+            "2026-05-24": {"blocks": [
+                {"start": "13:00", "end": "14:00", "label": "break", "state": "done"},
+                {"start": "11:55", "end": "13:00", "label": "work", "state": "pending"},
+            ]},
+        },
+    }), encoding="utf-8")
+    data = DataStore(data_dir).load()
+    # Done block kept as an override; stale pending block dropped.
+    assert data.days["2026-05-24"].overrides == {"13:00": Override(state="done")}
+
+
+def test_v2_migration_keeps_custom_label_override(data_dir: Path):
+    (data_dir / "data.json").write_text(json.dumps({
+        "version": 2,
+        "template": [{"start": "13:00", "end": "14:00", "label": "break"}],
+        "days": {
+            "2026-05-24": {"blocks": [
+                {"start": "13:00", "end": "14:00", "label": "long lunch", "state": "pending"},
+            ]},
+        },
+    }), encoding="utf-8")
+    data = DataStore(data_dir).load()
+    assert data.days["2026-05-24"].overrides == {
+        "13:00": Override(state="pending", label="long lunch")
+    }
