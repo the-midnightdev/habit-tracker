@@ -1,27 +1,25 @@
-import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toaster } from "@/components/ui/sonner";
 import DayView from "./DayView.jsx";
 import TemplateEditor from "./TemplateEditor.jsx";
 
 export default function App() {
-  const [tab, setTab] = useState("day");
   return (
-    <div className="app">
-      <h1>Time-Blocking Planner</h1>
-      <nav className="app__tabs">
-        <button
-          className={tab === "day" ? "active" : ""}
-          onClick={() => setTab("day")}
-        >
-          Day
-        </button>
-        <button
-          className={tab === "template" ? "active" : ""}
-          onClick={() => setTab("template")}
-        >
-          Template
-        </button>
-      </nav>
-      {tab === "day" ? <DayView /> : <TemplateEditor />}
+    <div className="mx-auto max-w-2xl px-4 py-8">
+      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Time-Blocking Planner</h1>
+      <Tabs defaultValue="day">
+        <TabsList className="mb-4">
+          <TabsTrigger value="day">Day</TabsTrigger>
+          <TabsTrigger value="template">Template</TabsTrigger>
+        </TabsList>
+        <TabsContent value="day">
+          <DayView />
+        </TabsContent>
+        <TabsContent value="template">
+          <TemplateEditor />
+        </TabsContent>
+      </Tabs>
+      <Toaster richColors position="top-center" />
     </div>
   );
 }
