@@ -122,6 +122,8 @@ class DataStore:
         self.directory.mkdir(parents=True, exist_ok=True)
         days_payload = {}
         for d, day in data.days.items():
+            if not day.overrides:
+                continue  # don't persist empty days (defensive; _prune removes them)
             overrides = {}
             for start, ov in day.overrides.items():
                 entry = {"state": ov.state}

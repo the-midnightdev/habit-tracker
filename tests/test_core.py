@@ -309,3 +309,24 @@ def test_v2_migration_keeps_custom_label_override(data_dir: Path):
     assert data.days["2026-05-24"].overrides == {
         "13:00": Override(state="pending", label="long lunch")
     }
+
+
+def test_label_override_survives_state_reset_to_pending():
+    data = _template_data()
+    set_block_label(data, "2026-05-24", "08:00", "fixed bug")
+    set_block_state(data, "2026-05-24", "08:00", "done")
+    set_block_state(data, "2026-05-24", "08:00", "pending")
+    # State reset to pending, but the custom label must survive.
+    blocks = get_day_blocks(data, "2026-05-24")
+    assert blocks[0].state == "pending"
+    assert blocks[0].label == "fixed bug"
+
+
+def test_empty_day_is_not_persisted(data_dir: Path):
+    data = PlannerData(
+        template=[TemplateBlock(start="08:00", end="09:00", label="standup")],
+        days={"2026-05-24": Day(overrides={})},  # empty day constructed by hand
+    )
+    store = DataStore(data_dir)
+    store.save(data)
+    assert store.load().days == {}  # empty day dropped on save
