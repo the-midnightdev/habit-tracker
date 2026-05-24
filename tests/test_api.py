@@ -125,3 +125,13 @@ def test_history_lists_touched_days(client):
     client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
     client.post("/api/days/2026-05-24/blocks/08:00", json={"state": "done"})
     assert client.get("/api/days").json() == ["2026-05-24"]
+
+
+def test_added_template_block_shows_on_a_day_with_existing_marks(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
+    client.post("/api/days/2026-05-24/blocks/08:00", json={"state": "done"})
+    client.post("/api/template", json={"start": "10:00", "end": "11:00", "label": "review"})
+    blocks = client.get("/api/days/2026-05-24").json()["blocks"]
+    assert [b["start"] for b in blocks] == ["08:00", "10:00"]
+    assert blocks[0]["state"] == "done"
+    assert blocks[1]["state"] == "pending"

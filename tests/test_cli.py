@@ -50,8 +50,9 @@ def test_done_by_bare_hour_marks_and_persists(run_cli):
     result = run_cli("done", "8")
     assert result.returncode == 0
     saved = json.loads((data_dir / "data.json").read_text(encoding="utf-8"))
-    block = saved["days"][__import__("datetime").date.today().isoformat()]["blocks"][0]
-    assert block["state"] == "done"
+    # v3 schema: days[date].overrides is a dict keyed by block start time.
+    overrides = saved["days"][__import__("datetime").date.today().isoformat()]["overrides"]
+    assert overrides["08:00"]["state"] == "done"
 
 
 def test_skip_by_row_number(run_cli):
@@ -60,9 +61,11 @@ def test_skip_by_row_number(run_cli):
     assert result.returncode == 0
     today = __import__("datetime").date.today().isoformat()
     saved = json.loads((data_dir / "data.json").read_text(encoding="utf-8"))
-    states = {b["start"]: b["state"] for b in saved["days"][today]["blocks"]}
-    assert states["09:00"] == "skipped"
-    assert states["08:00"] == "pending"
+    # v3 schema: days[date].overrides is a dict keyed by block start time.
+    # Only non-pending blocks are persisted; pending 08:00 has no override entry.
+    overrides = saved["days"][today]["overrides"]
+    assert overrides["09:00"]["state"] == "skipped"
+    assert "08:00" not in overrides
 
 
 def test_done_unknown_ref_errors(run_cli):
