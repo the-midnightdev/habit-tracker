@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 DATA_FILENAME = "data.json"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 STATES = ("pending", "done", "skipped")
 
 _TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -37,6 +37,7 @@ class TemplateBlock:
 
 @dataclass
 class DayBlock:
+    """A rendered block for a given day (template fields + resolved state/label)."""
     start: str
     end: str
     label: str
@@ -44,14 +45,43 @@ class DayBlock:
 
 
 @dataclass
+class Override:
+    """A per-day deviation for one block, keyed externally by start time."""
+    state: str = "pending"
+    label: str | None = None
+
+
+@dataclass
 class Day:
-    blocks: list[DayBlock] = field(default_factory=list)
+    overrides: dict[str, Override] = field(default_factory=dict)
 
 
 @dataclass
 class PlannerData:
     template: list[TemplateBlock] = field(default_factory=list)
     days: dict[str, Day] = field(default_factory=dict)
+
+
+def _migrate_v2_days(raw_days: dict, template: list[TemplateBlock]) -> dict[str, Day]:
+    """Convert v2 day snapshots to v3 overrides: keep a block only if it has a
+    non-pending state or a label that differs from the current template default."""
+    template_by_start = {b.start: b for b in template}
+    days: dict[str, Day] = {}
+    for date_iso, day in raw_days.items():
+        overrides: dict[str, Override] = {}
+        for blk in day.get("blocks", []):
+            start = blk["start"]
+            state = blk.get("state", "pending")
+            label = blk.get("label")
+            tb = template_by_start.get(start)
+            keep_label = tb is not None and label is not None and label != tb.label
+            if state != "pending" or keep_label:
+                overrides[start] = Override(
+                    state=state, label=label if keep_label else None
+                )
+        if overrides:
+            days[date_iso] = Day(overrides=overrides)
+    return days
 
 
 class DataStore:
@@ -68,13 +98,19 @@ class DataStore:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
                 raise ValueError("root is not an object")
-            if raw.get("version") != SCHEMA_VERSION:
-                raise ValueError(f"unsupported schema version: {raw.get('version')!r}")
+            version = raw.get("version")
             template = [TemplateBlock(**b) for b in raw["template"]]
-            days = {
-                d: Day(blocks=[DayBlock(**blk) for blk in day["blocks"]])
-                for d, day in raw["days"].items()
-            }
+            if version == SCHEMA_VERSION:
+                days = {
+                    d: Day(overrides={
+                        start: Override(**ov) for start, ov in day["overrides"].items()
+                    })
+                    for d, day in raw["days"].items()
+                }
+            elif version == 2:
+                days = _migrate_v2_days(raw["days"], template)
+            else:
+                raise ValueError(f"unsupported schema version: {version!r}")
             return PlannerData(template=template, days=days)
         except (json.JSONDecodeError, ValueError, TypeError, KeyError):
             backup = self._backup_corrupt()
@@ -84,13 +120,19 @@ class DataStore:
 
     def save(self, data: PlannerData) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
+        days_payload = {}
+        for d, day in data.days.items():
+            overrides = {}
+            for start, ov in day.overrides.items():
+                entry = {"state": ov.state}
+                if ov.label is not None:
+                    entry["label"] = ov.label
+                overrides[start] = entry
+            days_payload[d] = {"overrides": overrides}
         payload = {
             "version": SCHEMA_VERSION,
             "template": [asdict(b) for b in data.template],
-            "days": {
-                d: {"blocks": [asdict(b) for b in day.blocks]}
-                for d, day in data.days.items()
-            },
+            "days": days_payload,
         }
         self.path.write_text(
             json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"

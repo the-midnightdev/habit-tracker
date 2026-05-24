@@ -7,6 +7,7 @@ from core import (
     DataStore,
     Day,
     DayBlock,
+    Override,
     PlannerData,
     TemplateBlock,
     ValidationError,
@@ -23,7 +24,7 @@ def test_save_then_load_round_trips(data_dir: Path):
         template=[TemplateBlock(start="08:00", end="09:00", label="standup")],
         days={
             "2026-05-24": Day(
-                blocks=[DayBlock(start="08:00", end="09:00", label="fixed bug", state="done")]
+                overrides={"08:00": Override(state="done", label="fixed bug")}
             )
         },
     )
