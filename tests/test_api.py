@@ -135,3 +135,31 @@ def test_added_template_block_shows_on_a_day_with_existing_marks(client):
     assert [b["start"] for b in blocks] == ["08:00", "10:00"]
     assert blocks[0]["state"] == "done"
     assert blocks[1]["state"] == "pending"
+
+
+def test_create_block_with_tag(client):
+    resp = client.post("/api/template",
+                       json={"start": "08:00", "end": "09:00", "label": "x", "tag": "Deep work"})
+    assert resp.status_code == 201
+    assert resp.json()["tag"] == "Deep work"
+    assert client.get("/api/template").json()[0]["tag"] == "Deep work"
+
+
+def test_create_block_with_bad_tag_returns_400(client):
+    resp = client.post("/api/template",
+                       json={"start": "08:00", "end": "09:00", "label": "x", "tag": "Bogus"})
+    assert resp.status_code == 400
+
+
+def test_day_blocks_include_tag(client):
+    client.post("/api/template",
+                json={"start": "08:00", "end": "09:00", "label": "x", "tag": "Break"})
+    assert client.get("/api/days/2026-05-24").json()["blocks"][0]["tag"] == "Break"
+
+
+def test_edit_block_sets_tag(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "x"})
+    resp = client.put("/api/template/08:00",
+                      json={"new_start": "08:00", "new_end": "09:00", "label": "x", "tag": "Shallow"})
+    assert resp.status_code == 200
+    assert resp.json()["tag"] == "Shallow"

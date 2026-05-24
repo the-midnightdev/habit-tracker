@@ -43,12 +43,14 @@ class BlockIn(BaseModel):
     start: str
     end: str
     label: str
+    tag: str | None = None
 
 
 class BlockEdit(BaseModel):
     new_start: str
     new_end: str
     label: str
+    tag: str | None = None
 
 
 class MarkIn(BaseModel):
@@ -66,7 +68,7 @@ def create_template_block(block: BlockIn) -> dict:
     store = _store()
     data = store.load()
     try:
-        created = add_template_block(data, block.start, block.end, block.label)
+        created = add_template_block(data, block.start, block.end, block.label, tag=block.tag)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
     store.save(data)
@@ -81,7 +83,7 @@ def update_template_block(start: str, edit: BlockEdit) -> dict:
         raise HTTPException(status_code=404, detail=f"no block starts at {start!r}")
     try:
         updated = edit_template_block(
-            data, start, new_start=edit.new_start, new_end=edit.new_end, label=edit.label
+            data, start, new_start=edit.new_start, new_end=edit.new_end, label=edit.label, tag=edit.tag
         )
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
