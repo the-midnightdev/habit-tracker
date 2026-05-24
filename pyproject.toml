@@ -4,19 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "habit-tracker"
-version = "0.1.0"
-description = "Single-user CLI habit tracker"
+version = "0.2.0"
+description = "Single-user hourly time-blocking planner"
 requires-python = ">=3.13"
-dependencies = ["rich>=13.0"]
+dependencies = ["rich>=13.0", "fastapi>=0.110", "uvicorn>=0.27"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "httpx>=0.27"]
 
 [project.scripts]
-habit = "habit:main"
+plan = "cli:main"
 
 [tool.setuptools]
-py-modules = ["habit", "habit_core"]
+py-modules = ["cli", "core", "api"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
