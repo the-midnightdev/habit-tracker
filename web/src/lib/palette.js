@@ -1,0 +1,16 @@
+export const PAL = {
+  bg: "#FAF8F4",
+  surface: "#FFFFFF",
+  ink: "#1B1A17",
+  ink2: "#3A3631",
+  muted: "#6B655B",
+  hairline: "#ECE7DC",
+  hairline2: "#E2DBCC",
+  accent: "#E07A3B",
+  accentSoft: "#FBE9D7",
+  accentDeep: "#B65C24",
+  done: "#4C8A6E",
+  doneSoft: "#DDEBE2",
+  skip: "#B0A89C",
+  skipSoft: "#EFEBE3",
+};
