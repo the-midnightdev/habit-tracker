@@ -11,6 +11,7 @@ from pathlib import Path
 DATA_FILENAME = "data.json"
 SCHEMA_VERSION = 3
 STATES = ("pending", "done", "skipped")
+TAGS = ("Deep work", "Break", "Shallow")
 
 _TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
@@ -28,11 +29,17 @@ def validate_times(start: str, end: str) -> None:
         raise ValidationError(f"start {start!r} must be before end {end!r}")
 
 
+def validate_tag(tag: str | None) -> None:
+    if tag is not None and tag not in TAGS:
+        raise ValidationError(f"unknown tag {tag!r}; expected one of {TAGS} or null")
+
+
 @dataclass
 class TemplateBlock:
     start: str
     end: str
     label: str
+    tag: str | None = None
 
 
 @dataclass
@@ -42,6 +49,7 @@ class DayBlock:
     end: str
     label: str
     state: str = "pending"
+    tag: str | None = None
 
 
 @dataclass
@@ -174,22 +182,27 @@ def _check_template_slot(
             )
 
 
-def add_template_block(data: PlannerData, start: str, end: str, label: str) -> TemplateBlock:
+def add_template_block(
+    data: PlannerData, start: str, end: str, label: str, tag: str | None = None
+) -> TemplateBlock:
     _check_template_slot(data, start, end)
-    block = TemplateBlock(start=start, end=end, label=label)
+    validate_tag(tag)
+    block = TemplateBlock(start=start, end=end, label=label, tag=tag)
     data.template.append(block)
     data.template.sort(key=lambda b: b.start)
     return block
 
 
 def edit_template_block(
-    data: PlannerData, start: str, *, new_start: str, new_end: str, label: str
+    data: PlannerData, start: str, *, new_start: str, new_end: str,
+    label: str, tag: str | None = None
 ) -> TemplateBlock:
     block = find_template_block(data, start)
     if block is None:
         raise ValidationError(f"no template block starts at {start!r}")
     _check_template_slot(data, new_start, new_end, ignore_start=start)
-    block.start, block.end, block.label = new_start, new_end, label
+    validate_tag(tag)
+    block.start, block.end, block.label, block.tag = new_start, new_end, label, tag
     data.template.sort(key=lambda b: b.start)
     return block
 
@@ -214,7 +227,8 @@ def get_day_blocks(data: PlannerData, date_iso: str) -> list[DayBlock]:
         ov = overrides.get(tb.start)
         state = ov.state if ov is not None else "pending"
         label = ov.label if (ov is not None and ov.label is not None) else tb.label
-        blocks.append(DayBlock(start=tb.start, end=tb.end, label=label, state=state))
+        blocks.append(DayBlock(start=tb.start, end=tb.end, label=label,
+                               state=state, tag=tb.tag))
     return blocks
 
 

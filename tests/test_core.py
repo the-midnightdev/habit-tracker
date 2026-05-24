@@ -330,3 +330,54 @@ def test_empty_day_is_not_persisted(data_dir: Path):
     store = DataStore(data_dir)
     store.save(data)
     assert store.load().days == {}  # empty day dropped on save
+
+
+from core import TAGS
+
+
+def test_add_template_block_with_tag_round_trips(data_dir: Path):
+    data = PlannerData()
+    add_template_block(data, "08:00", "09:00", "standup", tag="Deep work")
+    DataStore(data_dir).save(data)
+    loaded = DataStore(data_dir).load()
+    assert loaded.template[0].tag == "Deep work"
+
+
+def test_template_block_defaults_to_no_tag():
+    data = PlannerData()
+    add_template_block(data, "08:00", "09:00", "standup")
+    assert data.template[0].tag is None
+
+
+def test_v3_file_without_tag_loads_as_none(data_dir: Path):
+    (data_dir / "data.json").write_text(json.dumps({
+        "version": 3,
+        "template": [{"start": "08:00", "end": "09:00", "label": "standup"}],
+        "days": {},
+    }), encoding="utf-8")
+    loaded = DataStore(data_dir).load()
+    assert loaded.template[0].tag is None
+
+
+def test_add_template_block_rejects_unknown_tag():
+    data = PlannerData()
+    with pytest.raises(ValidationError):
+        add_template_block(data, "08:00", "09:00", "standup", tag="Nonsense")
+
+
+def test_edit_template_block_sets_tag():
+    data = PlannerData()
+    add_template_block(data, "08:00", "09:00", "standup")
+    edit_template_block(data, "08:00", new_start="08:00", new_end="09:00",
+                        label="standup", tag="Break")
+    assert data.template[0].tag == "Break"
+
+
+def test_get_day_blocks_includes_tag():
+    data = PlannerData()
+    add_template_block(data, "08:00", "09:00", "standup", tag="Shallow")
+    assert get_day_blocks(data, "2026-05-24")[0].tag == "Shallow"
+
+
+def test_known_tags():
+    assert TAGS == ("Deep work", "Break", "Shallow")
