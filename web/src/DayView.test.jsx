@@ -17,7 +17,8 @@ test("renders blocks, progress count, and the active countdown", async () => {
     { start: "14:00", end: "15:00", label: "Auth bug", state: "pending", tag: "Deep work" },
   ]);
   render(<DayView now={FIXED_NOW} />);
-  await waitFor(() => expect(screen.getByText("Auth bug")).toBeInTheDocument());
+  // "Auth bug" appears in the timeline block AND the active "Now" card.
+  await waitFor(() => expect(screen.getAllByText("Auth bug").length).toBeGreaterThan(0));
   expect(screen.getByText("1 / 2 done")).toBeInTheDocument();
   expect(screen.getByText("37:00")).toBeInTheDocument();
 });

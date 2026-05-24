@@ -8,6 +8,11 @@ function fmt(min) {
   return `${h}h ${String(m).padStart(2, "0")}m`;
 }
 
+function elapsedPct(active, nowMin) {
+  const start = minOf(active.start), end = minOf(active.end);
+  return Math.min(100, Math.max(0, ((nowMin - start) / (end - start)) * 100));
+}
+
 export default function DaySidebar({ blocks, active, nowMin, onComplete }) {
   const done = blocks.filter((b) => b.state === "done").length;
   const total = blocks.length;
@@ -41,11 +46,15 @@ export default function DaySidebar({ blocks, active, nowMin, onComplete }) {
         <div className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-widest" style={{ color: PAL.muted }}>Now</div>
         {active ? (
           <>
-            <div className="flex items-baseline gap-1">
+            <div className="text-base font-semibold" style={{ color: PAL.ink }}>{active.label}</div>
+            <div className="mt-3 flex items-baseline gap-1">
               <span className="font-mono text-3xl font-semibold" style={{ color: PAL.accent }}>
                 {countdown(minOf(active.end), nowMin)}
               </span>
               <span className="text-xs" style={{ color: PAL.muted }}>left</span>
+            </div>
+            <div className="mt-2 h-1 w-full overflow-hidden rounded-full" style={{ background: PAL.hairline }}>
+              <div className="h-full" style={{ width: `${elapsedPct(active, nowMin)}%`, background: PAL.accent }} />
             </div>
             <Button className="mt-4 w-full" onClick={() => onComplete(active.start)}>
               <Check className="mr-1 h-4 w-4" /> Complete

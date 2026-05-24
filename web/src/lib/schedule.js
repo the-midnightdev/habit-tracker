@@ -33,8 +33,10 @@ export function focusedMinutes(blocks) {
 }
 
 export function remainingMinutes(blocks, nowMin) {
+  // Pending only: done is finished and skipped won't be done, so neither is
+  // "remaining" work.
   return blocks
-    .filter((b) => b.state !== "done" && minOf(b.end) > nowMin)
+    .filter((b) => b.state === "pending" && minOf(b.end) > nowMin)
     .reduce((sum, b) => sum + durMin(b), 0);
 }
 

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { PAL } from "./lib/palette.js";
 import { tagIcon } from "./lib/tags.js";
+import { minOf } from "./lib/schedule.js";
 
 const PX_PER_HR = 56;
 
@@ -10,8 +12,8 @@ export default function TimelineBlock({ block, axisStartMin, isActive, onMark })
   const [label, setLabel] = useState(block.label);
   useEffect(() => { setLabel(block.label); }, [block.label]);
 
-  const startMin = toMin(block.start);
-  const endMin = toMin(block.end);
+  const startMin = minOf(block.start);
+  const endMin = minOf(block.end);
   const top = ((startMin - axisStartMin) / 60) * PX_PER_HR;
   const height = Math.max(28, ((endMin - startMin) / 60) * PX_PER_HR - 4);
   const isDone = block.state === "done";
@@ -64,8 +66,8 @@ export default function TimelineBlock({ block, axisStartMin, isActive, onMark })
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100"
-          style={{ opacity: isActive ? 1 : undefined }}>
+        <div className={cn("flex items-center gap-1 transition",
+          isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
           <button aria-label="done" onClick={() => toggle("done")}
             className="flex h-7 w-7 items-center justify-center rounded-md border" style={{ borderColor: PAL.hairline2 }}>
             <Check className="h-3.5 w-3.5" />
@@ -79,8 +81,6 @@ export default function TimelineBlock({ block, axisStartMin, isActive, onMark })
     </div>
   );
 }
-
-function toMin(hm) { const [h, m] = hm.split(":").map(Number); return h * 60 + m; }
 
 function pillStyle(isActive, isDone) {
   if (isActive) return { background: PAL.accentSoft, color: PAL.accentDeep };

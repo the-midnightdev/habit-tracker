@@ -35,9 +35,17 @@ test("focusedMinutes sums done durations", () => {
   expect(focusedMinutes(blocks)).toBe(60);
 });
 
-test("remainingMinutes sums not-done blocks ending after now", () => {
+test("remainingMinutes sums pending blocks ending after now", () => {
   expect(remainingMinutes(blocks, minOf("14:23"))).toBe(60 + 90); // 14:00 and 15:00 blocks
   expect(remainingMinutes(blocks, minOf("15:30"))).toBe(90);       // only the 15:00 block
+});
+
+test("remainingMinutes excludes skipped blocks", () => {
+  const withSkip = [
+    { start: "14:00", end: "15:00", state: "skipped" },
+    { start: "15:00", end: "16:00", state: "pending" },
+  ];
+  expect(remainingMinutes(withSkip, minOf("13:00"))).toBe(60); // only the pending block
 });
 
 test("countdown renders mm:ss and clamps at zero", () => {

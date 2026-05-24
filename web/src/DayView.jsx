@@ -46,7 +46,7 @@ export default function DayView({ now: nowProp }) {
   const active = blocks.find((b) => b.start === activeKey) ?? null;
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-white" style={{ borderColor: PAL.hairline }}>
+    <div className="overflow-hidden rounded-2xl border bg-background" style={{ borderColor: PAL.hairline }}>
       <div className="flex items-center justify-between border-b px-6 py-4" style={{ borderColor: PAL.hairline }}>
         <div className="flex items-baseline gap-3">
           <div className="text-lg font-semibold tracking-tight">Planner</div>
