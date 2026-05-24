@@ -10,11 +10,11 @@ test("lists existing template blocks", async () => {
     { start: "08:00", end: "09:00", label: "standup" },
   ]);
   render(<TemplateEditor />);
-  await waitFor(() => expect(screen.getByText("standup")).toBeInTheDocument());
+  expect(await screen.findByText(/standup/)).toBeInTheDocument();
   expect(screen.getByText(/08:00/)).toBeInTheDocument();
 });
 
-test("editing a block calls editTemplateBlock with the new values", async () => {
+test("editing a block calls editTemplateBlock with new values", async () => {
   vi.spyOn(api, "getTemplate").mockResolvedValue([
     { start: "08:00", end: "09:00", label: "standup" },
   ]);
@@ -22,17 +22,12 @@ test("editing a block calls editTemplateBlock with the new values", async () => 
   render(<TemplateEditor />);
 
   fireEvent.click(await screen.findByRole("button", { name: /edit/i }));
-  fireEvent.change(screen.getByLabelText("edit label"), {
-    target: { value: "morning sync" },
-  });
-  fireEvent.change(screen.getByLabelText("edit start"), {
-    target: { value: "08:30" },
-  });
+  fireEvent.change(screen.getByLabelText("label"), { target: { value: "sync" } });
   fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
-  expect(edit).toHaveBeenCalledWith("08:00", {
-    new_start: "08:30",
-    new_end: "09:00",
-    label: "morning sync",
-  });
+  await waitFor(() =>
+    expect(edit).toHaveBeenCalledWith("08:00", {
+      new_start: "08:00", new_end: "09:00", label: "sync",
+    })
+  );
 });

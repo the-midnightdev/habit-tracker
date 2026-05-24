@@ -1,140 +1,120 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  addTemplateBlock,
-  deleteTemplateBlock,
-  editTemplateBlock,
-  getTemplate,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  addTemplateBlock, deleteTemplateBlock, editTemplateBlock, getTemplate,
 } from "./api.js";
 
-export default function TemplateEditor() {
-  const [blocks, setBlocks] = useState([]);
-  const [form, setForm] = useState({ start: "", end: "", label: "" });
-  const [editingStart, setEditingStart] = useState(null);
-  const [editForm, setEditForm] = useState({ start: "", end: "", label: "" });
-  const [error, setError] = useState(null);
+const EMPTY = { start: "", end: "", label: "" };
 
-  const refresh = () => {
-    setError(null);
-    return getTemplate()
-      .then(setBlocks)
-      .catch((e) => setError(e.message));
-  };
+function BlockDialog({ trigger, title, initial, onSubmit }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(initial);
 
   useEffect(() => {
-    refresh();
-  }, []);
+    if (open) setForm(initial);
+  }, [open, initial]);
 
   const submit = (e) => {
     e.preventDefault();
-    setError(null);
-    addTemplateBlock(form)
-      .then(() => {
-        setForm({ start: "", end: "", label: "" });
-        refresh();
-      })
-      .catch((err) => setError(err.message));
-  };
-
-  const remove = (start) =>
-    deleteTemplateBlock(start)
-      .then(refresh)
-      .catch((e) => setError(e.message));
-
-  const startEdit = (b) => {
-    setError(null);
-    setEditingStart(b.start);
-    setEditForm({ start: b.start, end: b.end, label: b.label });
-  };
-
-  const cancelEdit = () => setEditingStart(null);
-
-  const saveEdit = (e) => {
-    e.preventDefault();
-    setError(null);
-    editTemplateBlock(editingStart, {
-      new_start: editForm.start,
-      new_end: editForm.end,
-      label: editForm.label,
-    })
-      .then(() => {
-        setEditingStart(null);
-        refresh();
-      })
-      .catch((err) => setError(err.message));
+    onSubmit(form)
+      .then(() => setOpen(false))
+      .catch((err) => toast.error(err.message));
   };
 
   return (
-    <section className="template">
-      <h2>Template</h2>
-      {error && <p className="error">{error}</p>}
-      <ul className="template__list">
-        {blocks.map((b) =>
-          editingStart === b.start ? (
-            <li key={b.start}>
-              <form onSubmit={saveEdit} className="template__edit">
-                <input
-                  type="time"
-                  aria-label="edit start"
-                  value={editForm.start}
-                  onChange={(e) => setEditForm({ ...editForm, start: e.target.value })}
-                  required
-                />
-                <input
-                  type="time"
-                  aria-label="edit end"
-                  value={editForm.end}
-                  onChange={(e) => setEditForm({ ...editForm, end: e.target.value })}
-                  required
-                />
-                <input
-                  type="text"
-                  aria-label="edit label"
-                  value={editForm.label}
-                  onChange={(e) => setEditForm({ ...editForm, label: e.target.value })}
-                  required
-                />
-                <button type="submit">Save</button>
-                <button type="button" onClick={cancelEdit}>
-                  Cancel
-                </button>
-              </form>
-            </li>
-          ) : (
-            <li key={b.start}>
-              <span>{b.start}–{b.end}</span>
-              {" · "}
-              <span>{b.label}</span>
-              <button onClick={() => startEdit(b)}>Edit</button>
-              <button onClick={() => remove(b.start)}>Remove</button>
-            </li>
-          )
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <Label htmlFor="start">Start</Label>
+              <Input id="start" type="time" aria-label="start" required
+                value={form.start}
+                onChange={(e) => setForm({ ...form, start: e.target.value })} />
+            </div>
+            <div className="flex-1">
+              <Label htmlFor="end">End</Label>
+              <Input id="end" type="time" aria-label="end" required
+                value={form.end}
+                onChange={(e) => setForm({ ...form, end: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="label">Label</Label>
+            <Input id="label" aria-label="label" required value={form.label}
+              onChange={(e) => setForm({ ...form, label: e.target.value })} />
+          </div>
+          <DialogFooter>
+            <Button type="submit">Save</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function TemplateEditor() {
+  const [blocks, setBlocks] = useState([]);
+
+  const refresh = () =>
+    getTemplate().then(setBlocks).catch((e) => toast.error(e.message));
+
+  useEffect(() => { refresh(); }, []);
+
+  const add = (form) => addTemplateBlock(form).then(refresh);
+  const edit = (start) => (form) =>
+    editTemplateBlock(start, {
+      new_start: form.start, new_end: form.end, label: form.label,
+    }).then(refresh);
+  const remove = (start) =>
+    deleteTemplateBlock(start).then(refresh).catch((e) => toast.error(e.message));
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Template</CardTitle>
+        <BlockDialog
+          title="Add block"
+          initial={EMPTY}
+          onSubmit={add}
+          trigger={<Button size="sm">Add block</Button>}
+        />
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {blocks.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            No template blocks yet.
+          </p>
+        ) : (
+          blocks.map((b) => (
+            <div key={b.start}
+              className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">
+              <span className="tabular-nums text-muted-foreground">
+                {b.start}–{b.end}
+              </span>
+              <span className="flex-1">{b.label}</span>
+              <BlockDialog
+                title="Edit block"
+                initial={{ start: b.start, end: b.end, label: b.label }}
+                onSubmit={edit(b.start)}
+                trigger={<Button size="sm" variant="outline">Edit</Button>}
+              />
+              <Button size="sm" variant="ghost" onClick={() => remove(b.start)}>
+                Remove
+              </Button>
+            </div>
+          ))
         )}
-      </ul>
-      <form onSubmit={submit} className="template__form">
-        <input
-          type="time"
-          aria-label="start"
-          value={form.start}
-          onChange={(e) => setForm({ ...form, start: e.target.value })}
-          required
-        />
-        <input
-          type="time"
-          aria-label="end"
-          value={form.end}
-          onChange={(e) => setForm({ ...form, end: e.target.value })}
-          required
-        />
-        <input
-          type="text"
-          aria-label="label"
-          placeholder="label"
-          value={form.label}
-          onChange={(e) => setForm({ ...form, label: e.target.value })}
-          required
-        />
-        <button type="submit">Add</button>
-      </form>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
