@@ -39,8 +39,19 @@ def test_edit_template_block(client):
         json={"new_start": "08:30", "new_end": "09:00", "label": "renamed"},
     )
     assert resp.status_code == 200
+    assert resp.json()["label"] == "renamed"  # PUT returns the updated block
     starts = [b["start"] for b in client.get("/api/template").json()]
     assert starts == ["08:30"]
+
+
+def test_edit_template_block_collision_returns_400(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "a"})
+    client.post("/api/template", json={"start": "10:00", "end": "11:00", "label": "b"})
+    resp = client.put(
+        "/api/template/08:00",
+        json={"new_start": "10:00", "new_end": "10:30", "label": "x"},
+    )
+    assert resp.status_code == 400
 
 
 def test_edit_missing_block_returns_404(client):
@@ -80,9 +91,22 @@ def test_mark_block_state(client):
 
 def test_mark_block_label_override(client):
     client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
-    client.post("/api/days/2026-05-24/blocks/08:00", json={"label": "fixed bug"})
+    resp = client.post("/api/days/2026-05-24/blocks/08:00", json={"label": "fixed bug"})
+    assert resp.status_code == 200
     blocks = client.get("/api/days/2026-05-24").json()["blocks"]
     assert blocks[0]["label"] == "fixed bug"
+
+
+def test_mark_block_state_and_label_together(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
+    resp = client.post(
+        "/api/days/2026-05-24/blocks/08:00",
+        json={"state": "done", "label": "fixed bug"},
+    )
+    assert resp.status_code == 200
+    block = client.get("/api/days/2026-05-24").json()["blocks"][0]
+    assert block["state"] == "done"
+    assert block["label"] == "fixed bug"
 
 
 def test_mark_bad_state_returns_400(client):

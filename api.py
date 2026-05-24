@@ -114,7 +114,9 @@ def get_day(date_iso: str) -> dict:
 def mark_block(date_iso: str, start: str, mark: MarkIn) -> dict:
     store = _store()
     data = store.load()
-    # Validate the block exists for this day before mutating.
+    # Distinguish 404 (no such block) from 400 (block exists, bad state): core's
+    # set_block_state/set_block_label both raise ValidationError for either case,
+    # so we check existence here to return the right status.
     if all(b.start != start for b in get_day_blocks(data, date_iso)):
         raise HTTPException(status_code=404, detail=f"no block starts at {start!r}")
     try:
