@@ -200,58 +200,58 @@ def remove_template_block(data: PlannerData, start: str) -> bool:
     return True
 
 
-def _blocks_from_template(data: PlannerData) -> list[DayBlock]:
-    return [
-        DayBlock(start=b.start, end=b.end, label=b.label, state="pending")
-        for b in data.template
-    ]
-
-
 def get_day_blocks(data: PlannerData, date_iso: str) -> list[DayBlock]:
-    """Return the day's blocks: the stored copy if touched, else a live template view."""
-    day = data.days.get(date_iso)
-    if day is not None:
-        # Return a copy so callers can't mutate the stored ("frozen") day in place,
-        # matching the fresh-list behaviour of the untouched-day path below.
-        return list(day.blocks)
-    return _blocks_from_template(data)
+    """Render a day from the CURRENT template, applying that day's overrides.
+
+    Overrides whose start is no longer in the template are inert (ignored).
+    Reading never mutates `data`.
+    """
+    overrides = data.days[date_iso].overrides if date_iso in data.days else {}
+    blocks = []
+    for tb in data.template:
+        ov = overrides.get(tb.start)
+        state = ov.state if ov is not None else "pending"
+        label = ov.label if (ov is not None and ov.label is not None) else tb.label
+        blocks.append(DayBlock(start=tb.start, end=tb.end, label=label, state=state))
+    return blocks
 
 
-def _materialize(data: PlannerData, date_iso: str) -> Day:
+def _require_template_start(data: PlannerData, start: str) -> None:
+    if find_template_block(data, start) is None:
+        raise ValidationError(f"no template block starts at {start!r}")
+
+
+def _override(data: PlannerData, date_iso: str, start: str) -> Override:
+    day = data.days.setdefault(date_iso, Day())
+    return day.overrides.setdefault(start, Override())
+
+
+def _prune(data: PlannerData, date_iso: str, start: str) -> None:
     day = data.days.get(date_iso)
     if day is None:
-        day = Day(blocks=_blocks_from_template(data))
-        data.days[date_iso] = day
-    return day
-
-
-def _find_day_block(day: Day, start: str) -> DayBlock | None:
-    for block in day.blocks:
-        if block.start == start:
-            return block
-    return None
+        return
+    ov = day.overrides.get(start)
+    if ov is not None and ov.state == "pending" and ov.label is None:
+        del day.overrides[start]
+    if not day.overrides:
+        data.days.pop(date_iso, None)
 
 
 def set_block_state(data: PlannerData, date_iso: str, start: str, state: str) -> None:
     if state not in STATES:
         raise ValidationError(f"unknown state {state!r}; expected one of {STATES}")
-    day = _materialize(data, date_iso)
-    block = _find_day_block(day, start)
-    if block is None:
-        raise ValidationError(f"no block starts at {start!r} on {date_iso}")
-    block.state = state
+    _require_template_start(data, start)
+    _override(data, date_iso, start).state = state
+    _prune(data, date_iso, start)
 
 
 def set_block_label(data: PlannerData, date_iso: str, start: str, label: str) -> None:
-    day = _materialize(data, date_iso)
-    block = _find_day_block(day, start)
-    if block is None:
-        raise ValidationError(f"no block starts at {start!r} on {date_iso}")
-    block.label = label
+    _require_template_start(data, start)
+    _override(data, date_iso, start).label = label
 
 
 def history_dates(data: PlannerData) -> list[str]:
-    return sorted(data.days.keys())
+    return sorted(d for d, day in data.days.items() if day.overrides)
 
 
 def resolve_block_start(blocks: list[DayBlock], ref: str) -> str | None:

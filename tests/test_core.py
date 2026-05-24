@@ -172,13 +172,12 @@ def test_get_day_blocks_renders_untouched_day_from_template_as_pending():
     blocks = get_day_blocks(data, "2026-05-24")
     assert [b.start for b in blocks] == ["08:00", "09:00"]
     assert all(b.state == "pending" for b in blocks)
-    assert "2026-05-24" not in data.days  # reading does not materialize
+    assert "2026-05-24" not in data.days  # reading never writes
 
 
-def test_set_block_state_materializes_day_and_persists_state():
+def test_set_block_state_stores_override_and_renders():
     data = _template_data()
     set_block_state(data, "2026-05-24", "08:00", "done")
-    assert "2026-05-24" in data.days
     blocks = get_day_blocks(data, "2026-05-24")
     assert blocks[0].state == "done"
     assert blocks[1].state == "pending"
@@ -190,35 +189,49 @@ def test_set_block_state_rejects_unknown_state():
         set_block_state(data, "2026-05-24", "08:00", "maybe")
 
 
-def test_set_block_state_rejects_unknown_block():
+def test_set_block_state_rejects_block_not_in_template():
     data = _template_data()
     with pytest.raises(ValidationError):
         set_block_state(data, "2026-05-24", "11:00", "done")
-
-
-def test_set_block_label_rejects_unknown_block():
-    data = _template_data()
-    with pytest.raises(ValidationError):
-        set_block_label(data, "2026-05-24", "11:00", "nope")
 
 
 def test_set_block_label_overrides_for_that_day_only():
     data = _template_data()
     set_block_label(data, "2026-05-24", "08:00", "fixed login bug")
     assert get_day_blocks(data, "2026-05-24")[0].label == "fixed login bug"
-    # A different, untouched day still shows the template default.
     assert get_day_blocks(data, "2026-05-25")[0].label == "standup"
 
 
-def test_editing_template_does_not_touch_already_materialized_day():
+def test_set_block_label_rejects_block_not_in_template():
     data = _template_data()
-    set_block_state(data, "2026-05-24", "08:00", "done")  # materialize the day
-    edit_template_block(data, "08:00", new_start="08:00", new_end="09:00", label="renamed")
+    with pytest.raises(ValidationError):
+        set_block_label(data, "2026-05-24", "11:00", "nope")
+
+
+def test_adding_template_block_appears_on_a_day_with_existing_marks():
+    # THE BUG FIX: a day with overrides still reflects later template additions.
+    data = _template_data()
+    set_block_state(data, "2026-05-24", "08:00", "done")  # day now has an override
+    add_template_block(data, "10:00", "11:00", "review")
+    blocks = get_day_blocks(data, "2026-05-24")
+    assert [b.start for b in blocks] == ["08:00", "09:00", "10:00"]
+    assert blocks[0].state == "done"      # existing mark preserved
+    assert blocks[2].state == "pending"   # new block shows up, pending
+
+
+def test_removing_template_block_makes_its_override_inert():
+    data = _template_data()
+    set_block_state(data, "2026-05-24", "09:00", "skipped")
     remove_template_block(data, "09:00")
     blocks = get_day_blocks(data, "2026-05-24")
-    assert [b.start for b in blocks] == ["08:00", "09:00"]  # frozen copy unaffected
-    assert blocks[0].label == "standup"
-    assert blocks[0].state == "done"
+    assert [b.start for b in blocks] == ["08:00"]  # 09:00 gone everywhere
+
+
+def test_setting_state_back_to_pending_clears_override():
+    data = _template_data()
+    set_block_state(data, "2026-05-24", "08:00", "done")
+    set_block_state(data, "2026-05-24", "08:00", "pending")
+    assert "2026-05-24" not in data.days  # tidy: empty day removed
 
 
 def test_history_dates_sorted():
