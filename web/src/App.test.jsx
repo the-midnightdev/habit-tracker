@@ -11,5 +11,6 @@ test("shows the day view by default and switches to template", async () => {
   render(<App />);
   expect(screen.getByRole("button", { name: /day/i })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /template/i }));
-  expect(screen.getByRole("heading", { name: /template/i })).toBeInTheDocument();
+  // findBy* awaits the TemplateEditor's async load, settling state inside act().
+  expect(await screen.findByRole("heading", { name: /template/i })).toBeInTheDocument();
 });

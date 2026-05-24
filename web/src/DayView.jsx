@@ -2,14 +2,21 @@ import { useEffect, useState } from "react";
 import { getDay, markBlock } from "./api.js";
 import BlockRow from "./BlockRow.jsx";
 
+// Format a Date as YYYY-MM-DD in LOCAL time. Using toISOString() here would
+// convert to UTC and can land on the wrong calendar day for non-UTC users.
+function toLocalISODate(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function shiftDate(iso, days) {
   const d = new Date(iso + "T00:00:00");
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toLocalISODate(d);
 }
 
 export default function DayView() {
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => toLocalISODate(new Date()));
   const [blocks, setBlocks] = useState([]);
   const [error, setError] = useState(null);
 
