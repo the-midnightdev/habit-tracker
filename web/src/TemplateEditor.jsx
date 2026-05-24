@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   addTemplateBlock, deleteTemplateBlock, editTemplateBlock, getTemplate,
@@ -17,9 +17,12 @@ function BlockDialog({ trigger, title, initial, onSubmit }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(initial);
 
+  // Seed the form only when the dialog opens; `initial` is a one-time seed, not a
+  // live sync target (it's a fresh object each render and would reset mid-edit).
   useEffect(() => {
     if (open) setForm(initial);
-  }, [open, initial]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const submit = (e) => {
     e.preventDefault();
@@ -32,7 +35,12 @@ function BlockDialog({ trigger, title, initial, onSubmit }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Set the block's start time, end time, and label.
+          </DialogDescription>
+        </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           <div className="flex gap-3">
             <div className="flex-1">

@@ -1,15 +1,14 @@
 "use client";
-import { useTheme } from "next-themes"
 import { Toaster as Sonner } from "sonner"
 
+// App is light-only; use a fixed theme rather than next-themes/useTheme so the
+// Toaster works without a ThemeProvider in the tree.
 const Toaster = ({
   ...props
 }) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme}
+      theme="light"
       className="toaster group"
       toastOptions={{
         classNames: {
