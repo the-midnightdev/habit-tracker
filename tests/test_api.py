@@ -30,3 +30,32 @@ def test_create_overlapping_block_returns_400(client):
     resp = client.post("/api/template", json={"start": "09:00", "end": "11:00", "label": "b"})
     assert resp.status_code == 400
     assert "overlap" in resp.json()["detail"]
+
+
+def test_edit_template_block(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
+    resp = client.put(
+        "/api/template/08:00",
+        json={"new_start": "08:30", "new_end": "09:00", "label": "renamed"},
+    )
+    assert resp.status_code == 200
+    starts = [b["start"] for b in client.get("/api/template").json()]
+    assert starts == ["08:30"]
+
+
+def test_edit_missing_block_returns_404(client):
+    resp = client.put(
+        "/api/template/08:00",
+        json={"new_start": "08:00", "new_end": "09:00", "label": "x"},
+    )
+    assert resp.status_code == 404
+
+
+def test_delete_template_block(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
+    assert client.delete("/api/template/08:00").status_code == 204
+    assert client.get("/api/template").json() == []
+
+
+def test_delete_missing_block_returns_404(client):
+    assert client.delete("/api/template/08:00").status_code == 404

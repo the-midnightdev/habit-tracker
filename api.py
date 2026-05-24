@@ -5,7 +5,7 @@ import os
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 
 from core import (
@@ -13,6 +13,7 @@ from core import (
     ValidationError,
     add_template_block,
     edit_template_block,
+    find_template_block,
     get_day_blocks,
     history_dates,
     remove_template_block,
@@ -62,3 +63,29 @@ def create_template_block(block: BlockIn) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
     store.save(data)
     return asdict(created)
+
+
+@app.put("/api/template/{start}")
+def update_template_block(start: str, edit: BlockEdit) -> dict:
+    store = _store()
+    data = store.load()
+    if find_template_block(data, start) is None:
+        raise HTTPException(status_code=404, detail=f"no block starts at {start!r}")
+    try:
+        updated = edit_template_block(
+            data, start, new_start=edit.new_start, new_end=edit.new_end, label=edit.label
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    store.save(data)
+    return asdict(updated)
+
+
+@app.delete("/api/template/{start}", status_code=204)
+def delete_template_block(start: str) -> Response:
+    store = _store()
+    data = store.load()
+    if not remove_template_block(data, start):
+        raise HTTPException(status_code=404, detail=f"no block starts at {start!r}")
+    store.save(data)
+    return Response(status_code=204)
