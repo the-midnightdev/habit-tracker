@@ -59,3 +59,45 @@ def test_delete_template_block(client):
 
 def test_delete_missing_block_returns_404(client):
     assert client.delete("/api/template/08:00").status_code == 404
+
+
+def test_get_day_renders_from_template_as_pending(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
+    resp = client.get("/api/days/2026-05-24")
+    assert resp.status_code == 200
+    blocks = resp.json()["blocks"]
+    assert blocks[0]["state"] == "pending"
+    assert blocks[0]["label"] == "standup"
+
+
+def test_mark_block_state(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
+    resp = client.post("/api/days/2026-05-24/blocks/08:00", json={"state": "done"})
+    assert resp.status_code == 200
+    blocks = client.get("/api/days/2026-05-24").json()["blocks"]
+    assert blocks[0]["state"] == "done"
+
+
+def test_mark_block_label_override(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
+    client.post("/api/days/2026-05-24/blocks/08:00", json={"label": "fixed bug"})
+    blocks = client.get("/api/days/2026-05-24").json()["blocks"]
+    assert blocks[0]["label"] == "fixed bug"
+
+
+def test_mark_bad_state_returns_400(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
+    resp = client.post("/api/days/2026-05-24/blocks/08:00", json={"state": "maybe"})
+    assert resp.status_code == 400
+
+
+def test_mark_unknown_block_returns_404(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
+    resp = client.post("/api/days/2026-05-24/blocks/11:00", json={"state": "done"})
+    assert resp.status_code == 404
+
+
+def test_history_lists_touched_days(client):
+    client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "standup"})
+    client.post("/api/days/2026-05-24/blocks/08:00", json={"state": "done"})
+    assert client.get("/api/days").json() == ["2026-05-24"]

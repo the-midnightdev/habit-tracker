@@ -89,3 +89,33 @@ def delete_template_block(start: str) -> Response:
         raise HTTPException(status_code=404, detail=f"no block starts at {start!r}")
     store.save(data)
     return Response(status_code=204)
+
+
+@app.get("/api/days")
+def list_history() -> list[str]:
+    return history_dates(_store().load())
+
+
+@app.get("/api/days/{date_iso}")
+def get_day(date_iso: str) -> dict:
+    blocks = get_day_blocks(_store().load(), date_iso)
+    return {"date": date_iso, "blocks": [asdict(b) for b in blocks]}
+
+
+@app.post("/api/days/{date_iso}/blocks/{start}")
+def mark_block(date_iso: str, start: str, mark: MarkIn) -> dict:
+    store = _store()
+    data = store.load()
+    # Validate the block exists for this day before mutating.
+    if all(b.start != start for b in get_day_blocks(data, date_iso)):
+        raise HTTPException(status_code=404, detail=f"no block starts at {start!r}")
+    try:
+        if mark.state is not None:
+            set_block_state(data, date_iso, start, mark.state)
+        if mark.label is not None:
+            set_block_label(data, date_iso, start, mark.label)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    store.save(data)
+    blocks = get_day_blocks(data, date_iso)
+    return {"date": date_iso, "blocks": [asdict(b) for b in blocks]}
