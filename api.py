@@ -6,6 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from core import (
@@ -24,6 +25,13 @@ from core import (
 DEFAULT_DATA_DIR = Path.home() / ".plan"
 
 app = FastAPI(title="Time-Blocking Planner")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _store() -> DataStore:
