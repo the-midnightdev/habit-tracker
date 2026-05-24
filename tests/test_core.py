@@ -31,3 +31,21 @@ def test_save_creates_parent_directory(tmp_path: Path):
     nested = tmp_path / "a" / "b"
     DataStore(nested).save(PlannerData())
     assert (nested / "data.json").exists()
+
+
+def test_corrupt_file_is_backed_up_and_load_returns_empty(data_dir: Path):
+    (data_dir / "data.json").write_text("{ this is not json", encoding="utf-8")
+    seen = []
+    result = DataStore(data_dir).load(on_corrupt=seen.append)
+    assert result == PlannerData()
+    backups = list(data_dir.glob("data.json.corrupt-*"))
+    assert len(backups) == 1
+    assert seen == backups
+
+
+def test_v1_schema_is_rejected_as_corrupt(data_dir: Path):
+    (data_dir / "data.json").write_text(
+        json.dumps({"version": 1, "habits": []}), encoding="utf-8"
+    )
+    assert DataStore(data_dir).load() == PlannerData()
+    assert list(data_dir.glob("data.json.corrupt-*"))
