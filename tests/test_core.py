@@ -195,6 +195,12 @@ def test_set_block_state_rejects_unknown_block():
         set_block_state(data, "2026-05-24", "11:00", "done")
 
 
+def test_set_block_label_rejects_unknown_block():
+    data = _template_data()
+    with pytest.raises(ValidationError):
+        set_block_label(data, "2026-05-24", "11:00", "nope")
+
+
 def test_set_block_label_overrides_for_that_day_only():
     data = _template_data()
     set_block_label(data, "2026-05-24", "08:00", "fixed login bug")
@@ -241,9 +247,14 @@ def test_resolve_block_start_by_row_number_when_no_hour_match():
 
 
 def test_resolve_block_start_prefers_hour_over_row():
-    blocks = get_day_blocks(_template_data(), "2026-05-24")
-    # "8" matches the 08:00 start hour; it must NOT be read as row 8.
-    assert resolve_block_start(blocks, "8") == "08:00"
+    # Genuine ambiguity: "2" is both a valid start hour (02:00) and a valid row
+    # number (row 2 is 05:00). The start hour must win.
+    data = PlannerData()
+    add_template_block(data, "02:00", "03:00", "early")
+    add_template_block(data, "05:00", "06:00", "late")
+    blocks = get_day_blocks(data, "2026-05-24")
+    assert blocks[1].start == "05:00"  # row 2, the value we must NOT pick
+    assert resolve_block_start(blocks, "2") == "02:00"
 
 
 def test_resolve_block_start_unknown_returns_none():

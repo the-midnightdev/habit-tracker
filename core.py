@@ -169,7 +169,9 @@ def get_day_blocks(data: PlannerData, date_iso: str) -> list[DayBlock]:
     """Return the day's blocks: the stored copy if touched, else a live template view."""
     day = data.days.get(date_iso)
     if day is not None:
-        return day.blocks
+        # Return a copy so callers can't mutate the stored ("frozen") day in place,
+        # matching the fresh-list behaviour of the untouched-day path below.
+        return list(day.blocks)
     return _blocks_from_template(data)
 
 
