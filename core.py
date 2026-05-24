@@ -101,3 +101,58 @@ class DataStore:
         backup = self.path.with_name(f"{DATA_FILENAME}.corrupt-{timestamp}")
         self.path.rename(backup)
         return backup
+
+
+def _overlaps(a_start: str, a_end: str, b_start: str, b_end: str) -> bool:
+    # Half-open intervals [start, end): touching endpoints do not overlap.
+    return a_start < b_end and b_start < a_end
+
+
+def find_template_block(data: PlannerData, start: str) -> TemplateBlock | None:
+    for block in data.template:
+        if block.start == start:
+            return block
+    return None
+
+
+def _check_template_slot(
+    data: PlannerData, start: str, end: str, *, ignore_start: str | None = None
+) -> None:
+    validate_times(start, end)
+    for block in data.template:
+        if block.start == ignore_start:
+            continue
+        if block.start == start:
+            raise ValidationError(f"a block already starts at {start!r}")
+        if _overlaps(start, end, block.start, block.end):
+            raise ValidationError(
+                f"block {start}-{end} overlaps {block.start}-{block.end}"
+            )
+
+
+def add_template_block(data: PlannerData, start: str, end: str, label: str) -> TemplateBlock:
+    _check_template_slot(data, start, end)
+    block = TemplateBlock(start=start, end=end, label=label)
+    data.template.append(block)
+    data.template.sort(key=lambda b: b.start)
+    return block
+
+
+def edit_template_block(
+    data: PlannerData, start: str, *, new_start: str, new_end: str, label: str
+) -> TemplateBlock:
+    block = find_template_block(data, start)
+    if block is None:
+        raise ValidationError(f"no template block starts at {start!r}")
+    _check_template_slot(data, new_start, new_end, ignore_start=start)
+    block.start, block.end, block.label = new_start, new_end, label
+    data.template.sort(key=lambda b: b.start)
+    return block
+
+
+def remove_template_block(data: PlannerData, start: str) -> bool:
+    block = find_template_block(data, start)
+    if block is None:
+        return False
+    data.template.remove(block)
+    return True

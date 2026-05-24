@@ -75,3 +75,77 @@ def test_validate_times_rejects_start_not_before_end():
         validate_times("09:00", "09:00")
     with pytest.raises(ValidationError):
         validate_times("10:00", "09:00")
+
+
+from core import (
+    add_template_block,
+    edit_template_block,
+    find_template_block,
+    remove_template_block,
+)
+
+
+def test_add_template_block_keeps_list_sorted_by_start():
+    data = PlannerData()
+    add_template_block(data, "09:00", "10:00", "code")
+    add_template_block(data, "08:00", "09:00", "standup")
+    assert [b.start for b in data.template] == ["08:00", "09:00"]
+
+
+def test_add_template_block_rejects_duplicate_start():
+    data = PlannerData()
+    add_template_block(data, "08:00", "09:00", "standup")
+    with pytest.raises(ValidationError):
+        add_template_block(data, "08:00", "08:30", "other")
+
+
+def test_add_template_block_rejects_overlap():
+    data = PlannerData()
+    add_template_block(data, "08:00", "10:00", "deep work")
+    with pytest.raises(ValidationError):
+        add_template_block(data, "09:00", "11:00", "overlap")
+
+
+def test_adjacent_blocks_do_not_overlap():
+    data = PlannerData()
+    add_template_block(data, "08:00", "09:00", "a")
+    add_template_block(data, "09:00", "10:00", "b")  # touching is allowed
+    assert len(data.template) == 2
+
+
+def test_find_template_block():
+    data = PlannerData()
+    add_template_block(data, "08:00", "09:00", "standup")
+    assert find_template_block(data, "08:00").label == "standup"
+    assert find_template_block(data, "07:00") is None
+
+
+def test_edit_template_block_updates_fields_and_resorts():
+    data = PlannerData()
+    add_template_block(data, "08:00", "09:00", "standup")
+    add_template_block(data, "10:00", "11:00", "code")
+    edit_template_block(data, "08:00", new_start="12:00", new_end="13:00", label="lunch")
+    assert [b.start for b in data.template] == ["10:00", "12:00"]
+    assert find_template_block(data, "12:00").label == "lunch"
+
+
+def test_edit_template_block_rejects_collision_with_other_block():
+    data = PlannerData()
+    add_template_block(data, "08:00", "09:00", "a")
+    add_template_block(data, "10:00", "11:00", "b")
+    with pytest.raises(ValidationError):
+        edit_template_block(data, "08:00", new_start="10:00", new_end="10:30", label="x")
+
+
+def test_edit_missing_template_block_raises():
+    data = PlannerData()
+    with pytest.raises(ValidationError):
+        edit_template_block(data, "08:00", new_start="08:00", new_end="09:00", label="x")
+
+
+def test_remove_template_block():
+    data = PlannerData()
+    add_template_block(data, "08:00", "09:00", "standup")
+    assert remove_template_block(data, "08:00") is True
+    assert data.template == []
+    assert remove_template_block(data, "08:00") is False
