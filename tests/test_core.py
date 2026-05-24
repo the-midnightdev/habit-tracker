@@ -149,3 +149,73 @@ def test_remove_template_block():
     assert remove_template_block(data, "08:00") is True
     assert data.template == []
     assert remove_template_block(data, "08:00") is False
+
+
+from core import (
+    get_day_blocks,
+    history_dates,
+    set_block_label,
+    set_block_state,
+)
+
+
+def _template_data():
+    data = PlannerData()
+    add_template_block(data, "08:00", "09:00", "standup")
+    add_template_block(data, "09:00", "10:00", "code")
+    return data
+
+
+def test_get_day_blocks_renders_untouched_day_from_template_as_pending():
+    data = _template_data()
+    blocks = get_day_blocks(data, "2026-05-24")
+    assert [b.start for b in blocks] == ["08:00", "09:00"]
+    assert all(b.state == "pending" for b in blocks)
+    assert "2026-05-24" not in data.days  # reading does not materialize
+
+
+def test_set_block_state_materializes_day_and_persists_state():
+    data = _template_data()
+    set_block_state(data, "2026-05-24", "08:00", "done")
+    assert "2026-05-24" in data.days
+    blocks = get_day_blocks(data, "2026-05-24")
+    assert blocks[0].state == "done"
+    assert blocks[1].state == "pending"
+
+
+def test_set_block_state_rejects_unknown_state():
+    data = _template_data()
+    with pytest.raises(ValidationError):
+        set_block_state(data, "2026-05-24", "08:00", "maybe")
+
+
+def test_set_block_state_rejects_unknown_block():
+    data = _template_data()
+    with pytest.raises(ValidationError):
+        set_block_state(data, "2026-05-24", "11:00", "done")
+
+
+def test_set_block_label_overrides_for_that_day_only():
+    data = _template_data()
+    set_block_label(data, "2026-05-24", "08:00", "fixed login bug")
+    assert get_day_blocks(data, "2026-05-24")[0].label == "fixed login bug"
+    # A different, untouched day still shows the template default.
+    assert get_day_blocks(data, "2026-05-25")[0].label == "standup"
+
+
+def test_editing_template_does_not_touch_already_materialized_day():
+    data = _template_data()
+    set_block_state(data, "2026-05-24", "08:00", "done")  # materialize the day
+    edit_template_block(data, "08:00", new_start="08:00", new_end="09:00", label="renamed")
+    remove_template_block(data, "09:00")
+    blocks = get_day_blocks(data, "2026-05-24")
+    assert [b.start for b in blocks] == ["08:00", "09:00"]  # frozen copy unaffected
+    assert blocks[0].label == "standup"
+    assert blocks[0].state == "done"
+
+
+def test_history_dates_sorted():
+    data = _template_data()
+    set_block_state(data, "2026-05-25", "08:00", "done")
+    set_block_state(data, "2026-05-24", "08:00", "done")
+    assert history_dates(data) == ["2026-05-24", "2026-05-25"]
