@@ -9,15 +9,16 @@ function shiftDate(iso, days) {
 }
 
 export default function DayView() {
-  const today = new Date().toISOString().slice(0, 10);
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [blocks, setBlocks] = useState([]);
   const [error, setError] = useState(null);
 
-  const refresh = (d) =>
-    getDay(d)
+  const refresh = (d) => {
+    setError(null);
+    return getDay(d)
       .then((day) => setBlocks(day.blocks))
       .catch((e) => setError(e.message));
+  };
 
   useEffect(() => {
     refresh(date);

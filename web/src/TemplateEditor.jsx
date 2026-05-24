@@ -10,10 +10,12 @@ export default function TemplateEditor() {
   const [form, setForm] = useState({ start: "", end: "", label: "" });
   const [error, setError] = useState(null);
 
-  const refresh = () =>
-    getTemplate()
+  const refresh = () => {
+    setError(null);
+    return getTemplate()
       .then(setBlocks)
       .catch((e) => setError(e.message));
+  };
 
   useEffect(() => {
     refresh();
