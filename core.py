@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -314,6 +315,51 @@ def set_block_flag(data: PlannerData, date_iso: str, start: str, flagged: bool) 
         raise ValidationError("cannot flag a block with no comment")
     ov.flagged = flagged
     _prune(data, date_iso, start)
+
+
+def find_note(day: Day, note_id: str) -> Note | None:
+    for note in day.notes:
+        if note.id == note_id:
+            return note
+    return None
+
+
+def add_note(data: PlannerData, date_iso: str, text: str, flagged: bool = False) -> Note:
+    if not text:
+        raise ValidationError("note text must not be empty")
+    note = Note(id=uuid.uuid4().hex, text=text, flagged=flagged)
+    data.days.setdefault(date_iso, Day()).notes.append(note)
+    return note
+
+
+def edit_note(
+    data: PlannerData, date_iso: str, note_id: str, *,
+    text: str | None = None, flagged: bool | None = None,
+) -> Note:
+    day = data.days.get(date_iso)
+    note = find_note(day, note_id) if day is not None else None
+    if note is None:
+        raise ValidationError(f"no note {note_id!r} on {date_iso}")
+    if text is not None:
+        if not text:
+            raise ValidationError("note text must not be empty")
+        note.text = text
+    if flagged is not None:
+        note.flagged = flagged
+    return note
+
+
+def remove_note(data: PlannerData, date_iso: str, note_id: str) -> bool:
+    day = data.days.get(date_iso)
+    if day is None:
+        return False
+    note = find_note(day, note_id)
+    if note is None:
+        return False
+    day.notes.remove(note)
+    if not day.overrides and not day.notes:
+        data.days.pop(date_iso, None)
+    return True
 
 
 def history_dates(data: PlannerData) -> list[str]:

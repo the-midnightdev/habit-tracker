@@ -12,6 +12,10 @@ from core import (
     TemplateBlock,
     ValidationError,
     validate_times,
+    add_note,
+    edit_note,
+    remove_note,
+    find_note,
 )
 
 
@@ -470,3 +474,38 @@ def test_get_day_blocks_defaults_when_no_override():
     data = _data_with_block()
     block = get_day_blocks(data, "2026-05-24")[0]
     assert block.comment is None and block.flagged is False
+
+
+def test_add_note_generates_id_and_stores():
+    data = PlannerData()
+    note = add_note(data, "2026-05-24", "call Sam")
+    assert note.id and note.text == "call Sam" and note.flagged is False
+    assert data.days["2026-05-24"].notes == [note]
+
+
+def test_add_empty_note_rejected():
+    data = PlannerData()
+    with pytest.raises(ValidationError):
+        add_note(data, "2026-05-24", "")
+
+
+def test_edit_note_updates_fields():
+    data = PlannerData()
+    note = add_note(data, "2026-05-24", "draft")
+    edit_note(data, "2026-05-24", note.id, text="final", flagged=True)
+    assert note.text == "final" and note.flagged is True
+
+
+def test_edit_unknown_note_raises():
+    data = PlannerData()
+    add_note(data, "2026-05-24", "x")
+    with pytest.raises(ValidationError):
+        edit_note(data, "2026-05-24", "nope", text="y")
+
+
+def test_remove_note_and_prune_day():
+    data = PlannerData()
+    note = add_note(data, "2026-05-24", "x")
+    assert remove_note(data, "2026-05-24", note.id) is True
+    assert "2026-05-24" not in data.days  # day pruned when no overrides/notes left
+    assert remove_note(data, "2026-05-24", note.id) is False
