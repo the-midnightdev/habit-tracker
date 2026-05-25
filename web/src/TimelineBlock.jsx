@@ -84,10 +84,10 @@ export default function TimelineBlock({ block, axisStartMin, isActive, onMark })
               onBlur={submitLabel}
               onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} />
           ) : (
-            <div className="truncate text-sm font-medium"
-              style={{ textDecoration: isDone ? "line-through" : "none", color: isSkip ? PAL.muted : PAL.ink }}
+            <div className="cursor-text truncate text-sm font-medium"
+              style={{ textDecoration: isDone ? "line-through" : "none", color: block.label ? (isSkip ? PAL.muted : PAL.ink) : PAL.muted }}
               onClick={() => setEditing(true)}>
-              {block.label}
+              {block.label || "Add a label…"}
             </div>
           )}
         </div>

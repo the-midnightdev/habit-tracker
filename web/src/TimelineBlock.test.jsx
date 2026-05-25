@@ -46,6 +46,16 @@ test("editing the label submits once on blur", () => {
   expect(onMark).toHaveBeenCalledWith("08:00", { label: "fixed bug" });
 });
 
+test("an empty-label block shows a clickable placeholder to add a label", () => {
+  const onMark = vi.fn();
+  renderBlock({ label: "" }, onMark);
+  fireEvent.click(screen.getByText(/add a label/i));
+  const input = screen.getByLabelText("edit label");
+  fireEvent.change(input, { target: { value: "standup" } });
+  fireEvent.blur(input);
+  expect(onMark).toHaveBeenCalledWith("08:00", { label: "standup" });
+});
+
 test("shows a flag indicator when the block is flagged", () => {
   renderBlock({ comment: "ping Sam", flagged: true });
   expect(screen.getByLabelText("flagged")).toBeInTheDocument();
