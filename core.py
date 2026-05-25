@@ -79,6 +79,17 @@ class Day:
 
 
 @dataclass
+class Reminder:
+    """A flagged comment/note carried over from an earlier day."""
+    origin_date: str
+    kind: str               # "block" | "note"
+    ref: str                # block start time, or note id
+    text: str
+    block_label: str | None = None
+    block_time: str | None = None
+
+
+@dataclass
 class PlannerData:
     template: list[TemplateBlock] = field(default_factory=list)
     days: dict[str, Day] = field(default_factory=dict)
@@ -257,6 +268,32 @@ def get_day_blocks(data: PlannerData, date_iso: str) -> list[DayBlock]:
         blocks.append(DayBlock(start=tb.start, end=tb.end, label=label,
                                state=state, tag=tb.tag, comment=comment, flagged=flagged))
     return blocks
+
+
+def get_reminders(data: PlannerData, date_iso: str) -> list[Reminder]:
+    """Flagged block-comments and day-notes from days strictly before date_iso.
+
+    Block label/time are resolved against the CURRENT template; an orphaned
+    block (start no longer in the template) still surfaces with those fields None.
+    """
+    template_by_start = {b.start: b for b in data.template}
+    out: list[Reminder] = []
+    for origin, day in data.days.items():
+        if origin >= date_iso:
+            continue
+        for start, ov in day.overrides.items():
+            if ov.flagged and ov.comment:
+                tb = template_by_start.get(start)
+                out.append(Reminder(
+                    origin_date=origin, kind="block", ref=start, text=ov.comment,
+                    block_label=tb.label if tb is not None else None,
+                    block_time=f"{tb.start}–{tb.end}" if tb is not None else None,
+                ))
+        for note in day.notes:
+            if note.flagged:
+                out.append(Reminder(origin_date=origin, kind="note", ref=note.id, text=note.text))
+    out.sort(key=lambda r: (r.origin_date, r.kind, r.ref))
+    return out
 
 
 def _require_template_start(data: PlannerData, start: str) -> None:

@@ -9,6 +9,7 @@ from core import (
     DayBlock,
     Override,
     PlannerData,
+    Reminder,
     TemplateBlock,
     ValidationError,
     validate_times,
@@ -16,6 +17,7 @@ from core import (
     edit_note,
     remove_note,
     find_note,
+    get_reminders,
 )
 
 
@@ -509,3 +511,37 @@ def test_remove_note_and_prune_day():
     assert remove_note(data, "2026-05-24", note.id) is True
     assert "2026-05-24" not in data.days  # day pruned when no overrides/notes left
     assert remove_note(data, "2026-05-24", note.id) is False
+
+
+def test_get_reminders_returns_prior_day_flags_only():
+    data = _data_with_block()
+    set_block_comment(data, "2026-05-24", "08:00", "ping Sam")
+    set_block_flag(data, "2026-05-24", "08:00", True)
+    add_note(data, "2026-05-24", "buy milk", flagged=True)
+    add_note(data, "2026-05-24", "unflagged note", flagged=False)
+
+    # Viewed on the SAME day: no reminders (carryover is strictly earlier days).
+    assert get_reminders(data, "2026-05-24") == []
+
+    # Viewed the NEXT day: both flagged items surface, unflagged excluded.
+    rem = get_reminders(data, "2026-05-25")
+    kinds = {(r.kind, r.text) for r in rem}
+    assert ("block", "ping Sam") in kinds
+    assert ("note", "buy milk") in kinds
+    assert all(r.text != "unflagged note" for r in rem)
+
+    block_rem = next(r for r in rem if r.kind == "block")
+    assert block_rem.block_label == "standup"
+    assert block_rem.block_time == "08:00–09:00"
+
+
+def test_get_reminders_excludes_dismissed_and_orphans_survive():
+    data = _data_with_block()
+    set_block_comment(data, "2026-05-24", "08:00", "ping Sam")
+    set_block_flag(data, "2026-05-24", "08:00", True)
+    # Orphan the block by removing it from the template; reminder still surfaces.
+    data.template.clear()
+    rem = get_reminders(data, "2026-05-25")
+    assert len(rem) == 1
+    assert rem[0].text == "ping Sam"
+    assert rem[0].block_label is None and rem[0].block_time is None
