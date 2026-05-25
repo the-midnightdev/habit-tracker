@@ -362,6 +362,7 @@ def find_note(day: Day, note_id: str) -> Note | None:
 
 
 def add_note(data: PlannerData, date_iso: str, text: str, flagged: bool = False) -> Note:
+    text = text.strip()
     if not text:
         raise ValidationError("note text must not be empty")
     note = Note(id=uuid.uuid4().hex, text=text, flagged=flagged)
@@ -378,6 +379,7 @@ def edit_note(
     if note is None:
         raise ValidationError(f"no note {note_id!r} on {date_iso}")
     if text is not None:
+        text = text.strip()
         if not text:
             raise ValidationError("note text must not be empty")
         note.text = text

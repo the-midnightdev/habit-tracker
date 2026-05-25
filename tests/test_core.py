@@ -587,3 +587,22 @@ def test_dismiss_is_idempotent_for_missing_target():
     data = PlannerData()
     dismiss_reminder(data, "2026-05-24", "block", "08:00")  # no raise
     dismiss_reminder(data, "2026-05-24", "note", "nope")    # no raise
+
+
+def test_add_whitespace_only_note_rejected():
+    data = PlannerData()
+    with pytest.raises(ValidationError):
+        add_note(data, "2026-05-24", "   ")
+
+
+def test_add_note_trims_text():
+    data = PlannerData()
+    note = add_note(data, "2026-05-24", "  call Sam  ")
+    assert note.text == "call Sam"
+
+
+def test_edit_note_whitespace_text_rejected():
+    data = PlannerData()
+    note = add_note(data, "2026-05-24", "x")
+    with pytest.raises(ValidationError):
+        edit_note(data, "2026-05-24", note.id, text="   ")

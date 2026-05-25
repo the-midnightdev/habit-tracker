@@ -227,3 +227,10 @@ def test_delete_unknown_note_returns_404(client):
 def test_create_empty_note_returns_400(client):
     resp = client.post("/api/days/2026-05-24/notes", json={"text": ""})
     assert resp.status_code == 400
+
+
+def test_edit_existing_note_empty_text_returns_400(client):
+    created = client.post("/api/days/2026-05-24/notes", json={"text": "real"})
+    note_id = created.json()["notes"][0]["id"]
+    resp = client.put(f"/api/days/2026-05-24/notes/{note_id}", json={"text": "   "})
+    assert resp.status_code == 400
