@@ -61,3 +61,14 @@ test("saving the comment popover calls onMark with comment and flag", async () =
   fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
   expect(onMark).toHaveBeenCalledWith("08:00", { comment: "ping Sam", flagged: true });
 });
+
+test("dismissing the popover without saving discards the draft", async () => {
+  renderBlock({});  // no comment committed
+  const trigger = screen.getByRole("button", { name: /comment/i });
+  fireEvent.click(trigger);
+  const textarea = await screen.findByLabelText("comment text");
+  fireEvent.change(textarea, { target: { value: "draft only" } });
+  fireEvent.click(trigger);  // toggle closed without saving -> should reset draft
+  fireEvent.click(trigger);  // reopen
+  expect(await screen.findByLabelText("comment text")).toHaveValue("");
+});

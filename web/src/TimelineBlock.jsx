@@ -93,7 +93,13 @@ export default function TimelineBlock({ block, axisStartMin, isActive, onMark })
         </div>
         <div className={cn("flex flex-shrink-0 items-center gap-1 transition",
           isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
-          <Popover open={noteOpen} onOpenChange={setNoteOpen}>
+          <Popover open={noteOpen} onOpenChange={(open) => {
+            if (!open) {
+              setNoteText(block.comment ?? "");
+              setNoteFlag(block.flagged ?? false);
+            }
+            setNoteOpen(open);
+          }}>
             <PopoverTrigger asChild>
               <button aria-label="comment"
                 className="flex h-7 w-7 items-center justify-center rounded-md border" style={{ borderColor: PAL.hairline2 }}>
