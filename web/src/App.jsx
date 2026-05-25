@@ -5,8 +5,8 @@ import TemplateEditor from "./TemplateEditor.jsx";
 
 export default function App() {
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Time-Blocking Planner</h1>
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Make the Hours</h1>
       <Tabs defaultValue="day">
         <TabsList className="mb-4">
           <TabsTrigger value="day">Day</TabsTrigger>
