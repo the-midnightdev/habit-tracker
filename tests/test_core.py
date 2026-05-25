@@ -545,3 +545,21 @@ def test_get_reminders_excludes_dismissed_and_orphans_survive():
     assert len(rem) == 1
     assert rem[0].text == "ping Sam"
     assert rem[0].block_label is None and rem[0].block_time is None
+
+
+def test_get_reminders_sorted_oldest_origin_first():
+    data = _data_with_block()
+    # Flag a block comment on an earlier day and a note on a later day.
+    set_block_comment(data, "2026-05-20", "08:00", "older")
+    set_block_flag(data, "2026-05-20", "08:00", True)
+    add_note(data, "2026-05-23", "newer", flagged=True)
+    rem = get_reminders(data, "2026-05-25")
+    assert [r.origin_date for r in rem] == ["2026-05-20", "2026-05-23"]
+    assert [r.text for r in rem] == ["older", "newer"]
+
+
+def test_get_reminders_excludes_unflagged_block_comment():
+    data = _data_with_block()
+    set_block_comment(data, "2026-05-24", "08:00", "noted but not flagged")
+    # No set_block_flag call -> override has a comment but is not flagged.
+    assert get_reminders(data, "2026-05-25") == []
