@@ -299,7 +299,7 @@ def set_block_label(data: PlannerData, date_iso: str, start: str, label: str) ->
 def set_block_comment(data: PlannerData, date_iso: str, start: str, comment: str) -> None:
     _require_template_start(data, start)
     ov = _override(data, date_iso, start)
-    ov.comment = comment or None
+    ov.comment = comment.strip() or None
     if ov.comment is None:
         ov.flagged = False  # a flag with no comment is meaningless
     _prune(data, date_iso, start)

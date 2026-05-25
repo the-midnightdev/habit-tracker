@@ -446,3 +446,11 @@ def test_clearing_comment_also_clears_flag():
     set_block_flag(data, "2026-05-24", "08:00", True)
     set_block_comment(data, "2026-05-24", "08:00", "")
     assert "2026-05-24" not in data.days
+
+
+def test_whitespace_only_comment_treated_as_empty():
+    data = _data_with_block()
+    set_block_comment(data, "2026-05-24", "08:00", "   ")
+    assert "2026-05-24" not in data.days  # whitespace == empty, override pruned
+    with pytest.raises(ValidationError):
+        set_block_flag(data, "2026-05-24", "08:00", True)  # no real comment to flag
