@@ -86,3 +86,14 @@ test("dismissing a reminder calls the API and reloads", async () => {
     expect(dismiss).toHaveBeenCalledWith({ origin_date: "2026-05-23", kind: "note", ref: "old" })
   );
 });
+
+test("deleting a note calls the API and reloads", async () => {
+  vi.spyOn(api, "getDay")
+    .mockResolvedValueOnce({ date: "2026-05-24", blocks: [], notes: [{ id: "n1", text: "call Sam", flagged: false }], reminders: [] })
+    .mockResolvedValue({ date: "2026-05-24", blocks: [], notes: [], reminders: [] });
+  const del = vi.spyOn(api, "deleteNote").mockResolvedValue(null);
+  render(<DayView now={FIXED_NOW} />);
+  fireEvent.click(await screen.findByRole("button", { name: /delete note/i }));
+  await waitFor(() => expect(del).toHaveBeenCalledWith("2026-05-24", "n1"));
+  await waitFor(() => expect(screen.queryByText("call Sam")).not.toBeInTheDocument());
+});

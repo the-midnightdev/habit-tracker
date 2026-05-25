@@ -51,7 +51,7 @@ export default function DayView({ now: nowProp }) {
   const onAddNote = (note) => addNote(date, note).then(applyDay).catch((e) => toast.error(e.message));
   const onToggleNoteFlag = (n) =>
     editNote(date, n.id, { flagged: !n.flagged }).then(applyDay).catch((e) => toast.error(e.message));
-  const onDeleteNote = (n) => deleteNote(date, n.id).then(applyDay).catch((e) => toast.error(e.message));
+  const onDeleteNote = (n) => deleteNote(date, n.id).then(() => load(date)).catch((e) => toast.error(e.message));
   const onDismissReminder = (r) =>
     dismissReminder({ origin_date: r.origin_date, kind: r.kind, ref: r.ref })
       .then(() => load(date)).catch((e) => toast.error(e.message));
