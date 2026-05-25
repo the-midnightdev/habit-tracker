@@ -381,3 +381,18 @@ def test_get_day_blocks_includes_tag():
 
 def test_known_tags():
     assert TAGS == ("Deep work", "Break", "Shallow")
+
+
+def test_save_then_load_round_trips_comments_and_notes(data_dir: Path):
+    from core import Note
+    data = PlannerData(
+        template=[TemplateBlock(start="08:00", end="09:00", label="standup")],
+        days={
+            "2026-05-24": Day(
+                overrides={"08:00": Override(state="done", comment="ran long", flagged=True)},
+                notes=[Note(id="abc123", text="call Sam", flagged=True)],
+            )
+        },
+    )
+    DataStore(data_dir).save(data)
+    assert DataStore(data_dir).load() == data

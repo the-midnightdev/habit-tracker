@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 DATA_FILENAME = "data.json"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 STATES = ("pending", "done", "skipped")
 TAGS = ("Deep work", "Break", "Shallow")
 
@@ -50,6 +50,8 @@ class DayBlock:
     label: str
     state: str = "pending"
     tag: str | None = None
+    comment: str | None = None
+    flagged: bool = False
 
 
 @dataclass
@@ -57,11 +59,22 @@ class Override:
     """A per-day deviation for one block, keyed externally by start time."""
     state: str = "pending"
     label: str | None = None
+    comment: str | None = None
+    flagged: bool = False
+
+
+@dataclass
+class Note:
+    """A day-level note. `id` is a stable handle for edit/dismiss/delete."""
+    id: str
+    text: str
+    flagged: bool = False
 
 
 @dataclass
 class Day:
     overrides: dict[str, Override] = field(default_factory=dict)
+    notes: list[Note] = field(default_factory=list)
 
 
 @dataclass
@@ -92,6 +105,12 @@ def _migrate_v2_days(raw_days: dict, template: list[TemplateBlock]) -> dict[str,
     return days
 
 
+def _load_day(day: dict) -> Day:
+    overrides = {start: Override(**ov) for start, ov in day["overrides"].items()}
+    notes = [Note(**n) for n in day.get("notes", [])]
+    return Day(overrides=overrides, notes=notes)
+
+
 class DataStore:
     """Reads and writes planner data to a JSON file in a fixed directory."""
 
@@ -108,13 +127,8 @@ class DataStore:
                 raise ValueError("root is not an object")
             version = raw.get("version")
             template = [TemplateBlock(**b) for b in raw["template"]]
-            if version == SCHEMA_VERSION:
-                days = {
-                    d: Day(overrides={
-                        start: Override(**ov) for start, ov in day["overrides"].items()
-                    })
-                    for d, day in raw["days"].items()
-                }
+            if version in (3, 4):
+                days = {d: _load_day(day) for d, day in raw["days"].items()}
             elif version == 2:
                 days = _migrate_v2_days(raw["days"], template)
             else:
@@ -130,15 +144,25 @@ class DataStore:
         self.directory.mkdir(parents=True, exist_ok=True)
         days_payload = {}
         for d, day in data.days.items():
-            if not day.overrides:
+            if not day.overrides and not day.notes:
                 continue  # don't persist empty days (defensive; _prune removes them)
             overrides = {}
             for start, ov in day.overrides.items():
                 entry = {"state": ov.state}
                 if ov.label is not None:
                     entry["label"] = ov.label
+                if ov.comment is not None:
+                    entry["comment"] = ov.comment
+                if ov.flagged:
+                    entry["flagged"] = True
                 overrides[start] = entry
-            days_payload[d] = {"overrides": overrides}
+            day_payload = {"overrides": overrides}
+            if day.notes:
+                day_payload["notes"] = [
+                    {"id": n.id, "text": n.text, **({"flagged": True} if n.flagged else {})}
+                    for n in day.notes
+                ]
+            days_payload[d] = day_payload
         payload = {
             "version": SCHEMA_VERSION,
             "template": [asdict(b) for b in data.template],
