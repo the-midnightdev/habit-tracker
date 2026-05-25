@@ -251,8 +251,10 @@ def get_day_blocks(data: PlannerData, date_iso: str) -> list[DayBlock]:
         ov = overrides.get(tb.start)
         state = ov.state if ov is not None else "pending"
         label = ov.label if (ov is not None and ov.label is not None) else tb.label
+        comment = ov.comment if ov is not None else None
+        flagged = ov.flagged if ov is not None else False
         blocks.append(DayBlock(start=tb.start, end=tb.end, label=label,
-                               state=state, tag=tb.tag))
+                               state=state, tag=tb.tag, comment=comment, flagged=flagged))
     return blocks
 
 

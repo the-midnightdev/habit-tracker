@@ -454,3 +454,19 @@ def test_whitespace_only_comment_treated_as_empty():
     assert "2026-05-24" not in data.days  # whitespace == empty, override pruned
     with pytest.raises(ValidationError):
         set_block_flag(data, "2026-05-24", "08:00", True)  # no real comment to flag
+
+
+def test_get_day_blocks_includes_comment_and_flag():
+    from core import get_day_blocks
+    data = _data_with_block()
+    set_block_comment(data, "2026-05-24", "08:00", "ping Sam")
+    set_block_flag(data, "2026-05-24", "08:00", True)
+    block = get_day_blocks(data, "2026-05-24")[0]
+    assert block.comment == "ping Sam" and block.flagged is True
+
+
+def test_get_day_blocks_defaults_when_no_override():
+    from core import get_day_blocks
+    data = _data_with_block()
+    block = get_day_blocks(data, "2026-05-24")[0]
+    assert block.comment is None and block.flagged is False
