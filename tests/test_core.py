@@ -155,6 +155,8 @@ def test_remove_template_block():
 from core import (
     get_day_blocks,
     history_dates,
+    set_block_comment,
+    set_block_flag,
     set_block_label,
     set_block_state,
 )
@@ -410,3 +412,37 @@ def test_v3_file_loads_with_v4_defaults(data_dir: Path):
     assert ov.state == "done"
     assert ov.comment is None and ov.flagged is False
     assert loaded.days["2026-05-24"].notes == []
+
+
+def _data_with_block():
+    return PlannerData(template=[TemplateBlock(start="08:00", end="09:00", label="standup")])
+
+
+def test_set_block_comment_then_clear_prunes_override():
+    data = _data_with_block()
+    set_block_comment(data, "2026-05-24", "08:00", "ran long")
+    assert data.days["2026-05-24"].overrides["08:00"].comment == "ran long"
+    set_block_comment(data, "2026-05-24", "08:00", "")
+    assert "2026-05-24" not in data.days  # pruned: pending, no label/comment/flag
+
+
+def test_flag_requires_comment():
+    data = _data_with_block()
+    with pytest.raises(ValidationError):
+        set_block_flag(data, "2026-05-24", "08:00", True)
+
+
+def test_set_flag_keeps_override_when_pending():
+    data = _data_with_block()
+    set_block_comment(data, "2026-05-24", "08:00", "ping Sam")
+    set_block_flag(data, "2026-05-24", "08:00", True)
+    ov = data.days["2026-05-24"].overrides["08:00"]
+    assert ov.flagged is True and ov.state == "pending"
+
+
+def test_clearing_comment_also_clears_flag():
+    data = _data_with_block()
+    set_block_comment(data, "2026-05-24", "08:00", "ping Sam")
+    set_block_flag(data, "2026-05-24", "08:00", True)
+    set_block_comment(data, "2026-05-24", "08:00", "")
+    assert "2026-05-24" not in data.days

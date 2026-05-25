@@ -271,9 +271,15 @@ def _prune(data: PlannerData, date_iso: str, start: str) -> None:
     if day is None:
         return
     ov = day.overrides.get(start)
-    if ov is not None and ov.state == "pending" and ov.label is None:
+    if (
+        ov is not None
+        and ov.state == "pending"
+        and ov.label is None
+        and ov.comment is None
+        and not ov.flagged
+    ):
         del day.overrides[start]
-    if not day.overrides:
+    if not day.overrides and not day.notes:
         data.days.pop(date_iso, None)
 
 
@@ -288,6 +294,24 @@ def set_block_state(data: PlannerData, date_iso: str, start: str, state: str) ->
 def set_block_label(data: PlannerData, date_iso: str, start: str, label: str) -> None:
     _require_template_start(data, start)
     _override(data, date_iso, start).label = label
+
+
+def set_block_comment(data: PlannerData, date_iso: str, start: str, comment: str) -> None:
+    _require_template_start(data, start)
+    ov = _override(data, date_iso, start)
+    ov.comment = comment or None
+    if ov.comment is None:
+        ov.flagged = False  # a flag with no comment is meaningless
+    _prune(data, date_iso, start)
+
+
+def set_block_flag(data: PlannerData, date_iso: str, start: str, flagged: bool) -> None:
+    _require_template_start(data, start)
+    ov = _override(data, date_iso, start)
+    if flagged and not ov.comment:
+        raise ValidationError("cannot flag a block with no comment")
+    ov.flagged = flagged
+    _prune(data, date_iso, start)
 
 
 def history_dates(data: PlannerData) -> list[str]:
