@@ -399,6 +399,22 @@ def remove_note(data: PlannerData, date_iso: str, note_id: str) -> bool:
     return True
 
 
+def dismiss_reminder(data: PlannerData, origin_date: str, kind: str, ref: str) -> None:
+    """Clear the flag on the origin block-comment or note. Idempotent."""
+    day = data.days.get(origin_date)
+    if day is None:
+        return
+    if kind == "block":
+        ov = day.overrides.get(ref)
+        if ov is not None:
+            ov.flagged = False
+            _prune(data, origin_date, ref)
+    elif kind == "note":
+        note = find_note(day, ref)
+        if note is not None:
+            note.flagged = False
+
+
 def history_dates(data: PlannerData) -> list[str]:
     return sorted(d for d, day in data.days.items() if day.overrides)
 

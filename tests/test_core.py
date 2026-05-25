@@ -14,6 +14,7 @@ from core import (
     ValidationError,
     validate_times,
     add_note,
+    dismiss_reminder,
     edit_note,
     remove_note,
     find_note,
@@ -563,3 +564,26 @@ def test_get_reminders_excludes_unflagged_block_comment():
     set_block_comment(data, "2026-05-24", "08:00", "noted but not flagged")
     # No set_block_flag call -> override has a comment but is not flagged.
     assert get_reminders(data, "2026-05-25") == []
+
+
+def test_dismiss_block_reminder_clears_flag_keeps_text():
+    data = _data_with_block()
+    set_block_comment(data, "2026-05-24", "08:00", "ping Sam")
+    set_block_flag(data, "2026-05-24", "08:00", True)
+    dismiss_reminder(data, "2026-05-24", "block", "08:00")
+    ov = data.days["2026-05-24"].overrides["08:00"]
+    assert ov.flagged is False and ov.comment == "ping Sam"  # text kept
+    assert get_reminders(data, "2026-05-25") == []
+
+
+def test_dismiss_note_reminder_clears_flag():
+    data = PlannerData()
+    note = add_note(data, "2026-05-24", "buy milk", flagged=True)
+    dismiss_reminder(data, "2026-05-24", "note", note.id)
+    assert note.flagged is False and note.text == "buy milk"
+
+
+def test_dismiss_is_idempotent_for_missing_target():
+    data = PlannerData()
+    dismiss_reminder(data, "2026-05-24", "block", "08:00")  # no raise
+    dismiss_reminder(data, "2026-05-24", "note", "nope")    # no raise
