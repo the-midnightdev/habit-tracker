@@ -396,3 +396,17 @@ def test_save_then_load_round_trips_comments_and_notes(data_dir: Path):
     )
     DataStore(data_dir).save(data)
     assert DataStore(data_dir).load() == data
+
+
+def test_v3_file_loads_with_v4_defaults(data_dir: Path):
+    v3 = {
+        "version": 3,
+        "template": [{"start": "08:00", "end": "09:00", "label": "standup", "tag": None}],
+        "days": {"2026-05-24": {"overrides": {"08:00": {"state": "done"}}}},
+    }
+    (data_dir / "data.json").write_text(json.dumps(v3), encoding="utf-8")
+    loaded = DataStore(data_dir).load()
+    ov = loaded.days["2026-05-24"].overrides["08:00"]
+    assert ov.state == "done"
+    assert ov.comment is None and ov.flagged is False
+    assert loaded.days["2026-05-24"].notes == []
