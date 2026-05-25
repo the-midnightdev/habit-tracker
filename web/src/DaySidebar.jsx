@@ -2,6 +2,8 @@ import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 import { PAL } from "./lib/palette.js";
 import { countdown, focusedMinutes, remainingMinutes, minOf } from "./lib/schedule.js";
+import RemindersCard from "./RemindersCard.jsx";
+import NotesCard from "./NotesCard.jsx";
 
 function fmt(min) {
   const h = Math.floor(min / 60), m = min % 60;
@@ -13,7 +15,11 @@ function elapsedPct(active, nowMin) {
   return Math.min(100, Math.max(0, ((nowMin - start) / (end - start)) * 100));
 }
 
-export default function DaySidebar({ blocks, active, nowMin, onComplete }) {
+export default function DaySidebar({
+  blocks, active, nowMin, onComplete,
+  reminders = [], notes = [],
+  onDismissReminder, onAddNote, onToggleNoteFlag, onDeleteNote,
+}) {
   const done = blocks.filter((b) => b.state === "done").length;
   const total = blocks.length;
   const pct = total ? done / total : 0;
@@ -21,6 +27,7 @@ export default function DaySidebar({ blocks, active, nowMin, onComplete }) {
 
   return (
     <div className="flex flex-col gap-4 border-l p-5" style={{ borderColor: PAL.hairline }}>
+      <RemindersCard reminders={reminders} onDismiss={onDismissReminder} />
       <div className="rounded-2xl border bg-white p-4" style={{ borderColor: PAL.hairline }}>
         <div className="mb-3 font-mono text-[10px] font-semibold uppercase tracking-widest" style={{ color: PAL.muted }}>Progress</div>
         <div className="flex items-center gap-4">
@@ -64,6 +71,7 @@ export default function DaySidebar({ blocks, active, nowMin, onComplete }) {
           <div className="py-4 text-sm" style={{ color: PAL.muted }}>Nothing active right now.</div>
         )}
       </div>
+      <NotesCard notes={notes} onAdd={onAddNote} onToggleFlag={onToggleNoteFlag} onDelete={onDeleteNote} />
     </div>
   );
 }

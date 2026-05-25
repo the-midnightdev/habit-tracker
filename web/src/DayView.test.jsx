@@ -36,8 +36,53 @@ test("marks the active block done via Complete", async () => {
   );
 });
 
+test("day navigation updates the relative-day label", async () => {
+  mockDay([{ start: "09:00", end: "10:00", label: "Standup", state: "pending", tag: "Deep work" }]);
+  render(<DayView now={FIXED_NOW} />);
+  // The jump-to-today button's label tracks the viewed day.
+  const label = () => screen.getByRole("button", { name: /go to today/i }).textContent.trim();
+  await waitFor(() => expect(label()).toBe("Today"));
+
+  fireEvent.click(screen.getByRole("button", { name: /next day/i }));
+  await waitFor(() => expect(label()).toBe("Tomorrow"));
+
+  fireEvent.click(screen.getByRole("button", { name: /previous day/i }));
+  fireEvent.click(screen.getByRole("button", { name: /previous day/i }));
+  await waitFor(() => expect(label()).toBe("Yesterday"));
+
+  fireEvent.click(screen.getByRole("button", { name: /go to today/i }));
+  await waitFor(() => expect(label()).toBe("Today"));
+});
+
 test("shows the empty state when there are no blocks", async () => {
   mockDay([]);
   render(<DayView now={FIXED_NOW} />);
   await waitFor(() => expect(screen.getByText(/no blocks/i)).toBeInTheDocument());
+});
+
+test("renders reminders and notes from the day payload", async () => {
+  vi.spyOn(api, "getDay").mockResolvedValue({
+    date: "2026-05-24",
+    blocks: [{ start: "09:00", end: "10:00", label: "work", state: "pending", tag: "Deep work", comment: null, flagged: false }],
+    notes: [{ id: "n1", text: "call Sam", flagged: false }],
+    reminders: [{ origin_date: "2026-05-23", kind: "note", ref: "old", text: "from yesterday" }],
+  });
+  render(<DayView now={FIXED_NOW} />);
+  expect(await screen.findByText("from yesterday")).toBeInTheDocument();
+  expect(screen.getByText("call Sam")).toBeInTheDocument();
+});
+
+test("dismissing a reminder calls the API and reloads", async () => {
+  vi.spyOn(api, "getDay").mockResolvedValue({
+    date: "2026-05-24",
+    blocks: [],
+    notes: [],
+    reminders: [{ origin_date: "2026-05-23", kind: "note", ref: "old", text: "from yesterday" }],
+  });
+  const dismiss = vi.spyOn(api, "dismissReminder").mockResolvedValue(null);
+  render(<DayView now={FIXED_NOW} />);
+  fireEvent.click(await screen.findByRole("button", { name: /dismiss reminder/i }));
+  await waitFor(() =>
+    expect(dismiss).toHaveBeenCalledWith({ origin_date: "2026-05-23", kind: "note", ref: "old" })
+  );
 });
