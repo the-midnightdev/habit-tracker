@@ -78,6 +78,16 @@ class MarkIn(BaseModel):
     flagged: bool | None = None
 
 
+class NoteIn(BaseModel):
+    text: str
+    flagged: bool = False
+
+
+class NoteEdit(BaseModel):
+    text: str | None = None
+    flagged: bool | None = None
+
+
 @app.get("/api/template")
 def list_template() -> list[dict]:
     return [asdict(b) for b in _store().load().template]
@@ -150,3 +160,40 @@ def mark_block(date_iso: str, start: str, mark: MarkIn) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
     store.save(data)
     return _day_payload(data, date_iso)
+
+
+@app.post("/api/days/{date_iso}/notes", status_code=201)
+def create_note(date_iso: str, note: NoteIn) -> dict:
+    store = _store()
+    data = store.load()
+    try:
+        add_note(data, date_iso, note.text, flagged=note.flagged)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    store.save(data)
+    return _day_payload(data, date_iso)
+
+
+@app.put("/api/days/{date_iso}/notes/{note_id}")
+def update_note(date_iso: str, note_id: str, edit: NoteEdit) -> dict:
+    store = _store()
+    data = store.load()
+    day = data.days.get(date_iso)
+    if day is None or find_note(day, note_id) is None:
+        raise HTTPException(status_code=404, detail=f"no note {note_id!r} on {date_iso}")
+    try:
+        edit_note(data, date_iso, note_id, text=edit.text, flagged=edit.flagged)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    store.save(data)
+    return _day_payload(data, date_iso)
+
+
+@app.delete("/api/days/{date_iso}/notes/{note_id}", status_code=204)
+def delete_note(date_iso: str, note_id: str) -> Response:
+    store = _store()
+    data = store.load()
+    if not remove_note(data, date_iso, note_id):
+        raise HTTPException(status_code=404, detail=f"no note {note_id!r} on {date_iso}")
+    store.save(data)
+    return Response(status_code=204)

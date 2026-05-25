@@ -193,3 +193,37 @@ def test_flagging_block_without_comment_returns_400(client):
     _add_block(client)
     resp = client.post("/api/days/2026-05-24/blocks/08:00", json={"flagged": True})
     assert resp.status_code == 400
+
+
+def test_create_edit_delete_note(client):
+    created = client.post("/api/days/2026-05-24/notes",
+                          json={"text": "call Sam", "flagged": False})
+    assert created.status_code == 201
+    body = created.json()
+    assert body["notes"][0]["text"] == "call Sam"
+    note_id = body["notes"][0]["id"]
+
+    edited = client.put(f"/api/days/2026-05-24/notes/{note_id}",
+                        json={"text": "call Sam at 3", "flagged": True})
+    assert edited.status_code == 200
+    assert edited.json()["notes"][0]["text"] == "call Sam at 3"
+    assert edited.json()["notes"][0]["flagged"] is True
+
+    deleted = client.delete(f"/api/days/2026-05-24/notes/{note_id}")
+    assert deleted.status_code == 204
+    assert client.get("/api/days/2026-05-24").json()["notes"] == []
+
+
+def test_edit_unknown_note_returns_404(client):
+    resp = client.put("/api/days/2026-05-24/notes/nope", json={"text": "x"})
+    assert resp.status_code == 404
+
+
+def test_delete_unknown_note_returns_404(client):
+    resp = client.delete("/api/days/2026-05-24/notes/nope")
+    assert resp.status_code == 404
+
+
+def test_create_empty_note_returns_400(client):
+    resp = client.post("/api/days/2026-05-24/notes", json={"text": ""})
+    assert resp.status_code == 400
