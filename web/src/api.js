@@ -40,3 +40,19 @@ export const getHistory = () => request("/api/days");
 
 export const markBlock = (date, start, mark) =>
   request(`/api/days/${date}/blocks/${start}`, jsonPost(mark));
+
+export const addNote = (date, note) =>
+  request(`/api/days/${date}/notes`, jsonPost(note));
+
+export const editNote = (date, id, edit) =>
+  request(`/api/days/${date}/notes/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(edit),
+  });
+
+export const deleteNote = (date, id) =>
+  request(`/api/days/${date}/notes/${id}`, { method: "DELETE" });
+
+export const dismissReminder = (payload) =>
+  request("/api/reminders/dismiss", jsonPost(payload));
