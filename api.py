@@ -12,12 +12,20 @@ from pydantic import BaseModel
 from core import (
     DataStore,
     ValidationError,
+    add_note,
     add_template_block,
+    dismiss_reminder,
+    edit_note,
     edit_template_block,
+    find_note,
     find_template_block,
     get_day_blocks,
+    get_reminders,
     history_dates,
+    remove_note,
     remove_template_block,
+    set_block_comment,
+    set_block_flag,
     set_block_label,
     set_block_state,
 )
@@ -39,6 +47,16 @@ def _store() -> DataStore:
     return DataStore(Path(override) if override else DEFAULT_DATA_DIR)
 
 
+def _day_payload(data, date_iso: str) -> dict:
+    notes = data.days[date_iso].notes if date_iso in data.days else []
+    return {
+        "date": date_iso,
+        "blocks": [asdict(b) for b in get_day_blocks(data, date_iso)],
+        "notes": [asdict(n) for n in notes],
+        "reminders": [asdict(r) for r in get_reminders(data, date_iso)],
+    }
+
+
 class BlockIn(BaseModel):
     start: str
     end: str
@@ -56,6 +74,8 @@ class BlockEdit(BaseModel):
 class MarkIn(BaseModel):
     state: str | None = None
     label: str | None = None
+    comment: str | None = None
+    flagged: bool | None = None
 
 
 @app.get("/api/template")
@@ -108,17 +128,13 @@ def list_history() -> list[str]:
 
 @app.get("/api/days/{date_iso}")
 def get_day(date_iso: str) -> dict:
-    blocks = get_day_blocks(_store().load(), date_iso)
-    return {"date": date_iso, "blocks": [asdict(b) for b in blocks]}
+    return _day_payload(_store().load(), date_iso)
 
 
 @app.post("/api/days/{date_iso}/blocks/{start}")
 def mark_block(date_iso: str, start: str, mark: MarkIn) -> dict:
     store = _store()
     data = store.load()
-    # Distinguish 404 (no such block) from 400 (block exists, bad state): core's
-    # set_block_state/set_block_label both raise ValidationError for either case,
-    # so we check existence here to return the right status.
     if all(b.start != start for b in get_day_blocks(data, date_iso)):
         raise HTTPException(status_code=404, detail=f"no block starts at {start!r}")
     try:
@@ -126,8 +142,11 @@ def mark_block(date_iso: str, start: str, mark: MarkIn) -> dict:
             set_block_state(data, date_iso, start, mark.state)
         if mark.label is not None:
             set_block_label(data, date_iso, start, mark.label)
+        if mark.comment is not None:
+            set_block_comment(data, date_iso, start, mark.comment)
+        if mark.flagged is not None:
+            set_block_flag(data, date_iso, start, mark.flagged)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
     store.save(data)
-    blocks = get_day_blocks(data, date_iso)
-    return {"date": date_iso, "blocks": [asdict(b) for b in blocks]}
+    return _day_payload(data, date_iso)

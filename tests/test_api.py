@@ -163,3 +163,33 @@ def test_edit_block_sets_tag(client):
                       json={"new_start": "08:00", "new_end": "09:00", "label": "x", "tag": "Shallow"})
     assert resp.status_code == 200
     assert resp.json()["tag"] == "Shallow"
+
+
+def _add_block(client, start="08:00", end="09:00", label="standup"):
+    client.post("/api/template", json={"start": start, "end": end, "label": label})
+
+
+def test_get_day_returns_notes_and_reminders_keys(client):
+    _add_block(client)
+    body = client.get("/api/days/2026-05-24").json()
+    assert body["blocks"][0]["comment"] is None
+    assert body["blocks"][0]["flagged"] is False
+    assert body["notes"] == []
+    assert body["reminders"] == []
+
+
+def test_flagged_block_comment_becomes_reminder_next_day(client):
+    _add_block(client)
+    resp = client.post("/api/days/2026-05-24/blocks/08:00",
+                       json={"comment": "ping Sam", "flagged": True})
+    assert resp.status_code == 200
+    assert resp.json()["blocks"][0]["flagged"] is True
+    assert client.get("/api/days/2026-05-24").json()["reminders"] == []
+    rem = client.get("/api/days/2026-05-25").json()["reminders"]
+    assert len(rem) == 1 and rem[0]["text"] == "ping Sam" and rem[0]["kind"] == "block"
+
+
+def test_flagging_block_without_comment_returns_400(client):
+    _add_block(client)
+    resp = client.post("/api/days/2026-05-24/blocks/08:00", json={"flagged": True})
+    assert resp.status_code == 400
