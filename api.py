@@ -88,6 +88,12 @@ class NoteEdit(BaseModel):
     flagged: bool | None = None
 
 
+class DismissIn(BaseModel):
+    origin_date: str
+    kind: str
+    ref: str
+
+
 @app.get("/api/template")
 def list_template() -> list[dict]:
     return [asdict(b) for b in _store().load().template]
@@ -195,5 +201,14 @@ def delete_note(date_iso: str, note_id: str) -> Response:
     data = store.load()
     if not remove_note(data, date_iso, note_id):
         raise HTTPException(status_code=404, detail=f"no note {note_id!r} on {date_iso}")
+    store.save(data)
+    return Response(status_code=204)
+
+
+@app.post("/api/reminders/dismiss", status_code=204)
+def dismiss(payload: DismissIn) -> Response:
+    store = _store()
+    data = store.load()
+    dismiss_reminder(data, payload.origin_date, payload.kind, payload.ref)
     store.save(data)
     return Response(status_code=204)

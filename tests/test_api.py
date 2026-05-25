@@ -234,3 +234,21 @@ def test_edit_existing_note_empty_text_returns_400(client):
     note_id = created.json()["notes"][0]["id"]
     resp = client.put(f"/api/days/2026-05-24/notes/{note_id}", json={"text": "   "})
     assert resp.status_code == 400
+
+
+def test_dismiss_reminder_endpoint(client):
+    _add_block(client)
+    client.post("/api/days/2026-05-24/blocks/08:00",
+                json={"comment": "ping Sam", "flagged": True})
+    assert len(client.get("/api/days/2026-05-25").json()["reminders"]) == 1
+
+    resp = client.post("/api/reminders/dismiss",
+                       json={"origin_date": "2026-05-24", "kind": "block", "ref": "08:00"})
+    assert resp.status_code == 204
+    assert client.get("/api/days/2026-05-25").json()["reminders"] == []
+
+
+def test_dismiss_missing_reminder_is_noop_204(client):
+    resp = client.post("/api/reminders/dismiss",
+                       json={"origin_date": "2026-05-24", "kind": "note", "ref": "nope"})
+    assert resp.status_code == 204
