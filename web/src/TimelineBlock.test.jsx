@@ -45,3 +45,19 @@ test("editing the label submits once on blur", () => {
   expect(onMark).toHaveBeenCalledTimes(1);
   expect(onMark).toHaveBeenCalledWith("08:00", { label: "fixed bug" });
 });
+
+test("shows a flag indicator when the block is flagged", () => {
+  renderBlock({ comment: "ping Sam", flagged: true });
+  expect(screen.getByLabelText("flagged")).toBeInTheDocument();
+});
+
+test("saving the comment popover calls onMark with comment and flag", async () => {
+  const onMark = vi.fn();
+  renderBlock({}, onMark);
+  fireEvent.click(screen.getByRole("button", { name: /comment/i }));
+  const textarea = await screen.findByLabelText("comment text");
+  fireEvent.change(textarea, { target: { value: "ping Sam" } });
+  fireEvent.click(screen.getByRole("button", { name: /flag for tomorrow/i }));
+  fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+  expect(onMark).toHaveBeenCalledWith("08:00", { comment: "ping Sam", flagged: true });
+});
