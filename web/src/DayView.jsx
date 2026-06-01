@@ -11,7 +11,10 @@ import DaySidebar from "./DaySidebar.jsx";
 import BlockDialog from "./BlockDialog.jsx";
 import CheckInModal from "./CheckInModal.jsx";
 import { shouldCheckIn, composeCheckIn } from "./lib/checkin.js";
-import { notify, requestPermission } from "./lib/notify.js";
+import { requestPermission } from "./lib/notify.js";
+import {
+  isPushSupported, registerServiceWorker, subscribeToPush, unsubscribeFromPush,
+} from "./lib/push.js";
 
 const PX_PER_HR = 64;
 const toLocalISODate = (d) => {
@@ -46,7 +49,25 @@ export default function DayView({ now: nowProp }) {
 
   const toggleCheckIn = async () => {
     const next = !checkInOn;
-    if (next) await requestPermission();
+    try {
+      if (next) {
+        if (!isPushSupported()) {
+          toast.error("Notifications aren't supported in this browser.");
+          return;
+        }
+        if ((await requestPermission()) !== "granted") {
+          toast.error("Notification permission denied.");
+          return;
+        }
+        await registerServiceWorker();
+        await subscribeToPush();
+      } else {
+        await unsubscribeFromPush();
+      }
+    } catch (e) {
+      toast.error(e.message);
+      return;
+    }
     localStorage?.setItem("checkInOn", next ? "1" : "0");
     setCheckInOn(next);
   };
@@ -89,10 +110,30 @@ export default function DayView({ now: nowProp }) {
     if (shouldCheckIn(nowMin, active, lastStart.current)) {
       lastStart.current = active.start;
       const content = composeCheckIn(active);
-      notify(content.title, content.question);
       setCheckIn({ block: active, content });
     }
   }, [nowMin, active, checkInOn, isToday, checkIn]);
+
+  // A notification "Open" click (handled by the Service Worker) posts a message
+  // to open the in-app modal for that block.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const onMessage = (event) => {
+      const d = event.data;
+      if (d && d.type === "checkin-open" && d.block) {
+        setCheckIn({
+          block: d.block,
+          content: {
+            title: d.block.title,
+            question: d.block.question,
+            defaultLabel: d.block.label,
+          },
+        });
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, []);
 
   return (
     <div className="overflow-hidden rounded-2xl border bg-background" style={{ borderColor: PAL.hairline }}>
