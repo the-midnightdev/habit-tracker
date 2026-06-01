@@ -269,3 +269,11 @@ def test_subscribe_then_unsubscribe(client, data_dir):
 
     assert client.post("/api/push/unsubscribe", json={"endpoint": "https://push/abc"}).status_code == 204
     assert SubscriptionStore(data_dir).all() == []
+
+
+def test_seconds_to_next_hour():
+    from datetime import datetime
+    from api import seconds_to_next_hour
+
+    assert seconds_to_next_hour(datetime(2026, 6, 1, 9, 0, 0)) == 3600
+    assert seconds_to_next_hour(datetime(2026, 6, 1, 9, 59, 0)) == 60

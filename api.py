@@ -1,8 +1,10 @@
 """FastAPI JSON backend over the planner core."""
 from __future__ import annotations
 
+import asyncio
 import os
 from dataclasses import asdict
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
@@ -29,7 +31,7 @@ from core import (
     set_block_label,
     set_block_state,
 )
-from push import SubscriptionStore, VapidKeys, load_or_create_vapid
+from push import SubscriptionStore, VapidKeys, load_or_create_vapid, push_active_block
 
 DEFAULT_DATA_DIR = Path.home() / ".plan"
 
@@ -252,3 +254,30 @@ def push_subscribe(sub: SubscribeIn) -> dict:
 def push_unsubscribe(payload: UnsubscribeIn) -> Response:
     _subs().remove(payload.endpoint)
     return Response(status_code=204)
+
+
+def seconds_to_next_hour(now: datetime) -> float:
+    """Seconds from `now` until the next top-of-hour (xx:00:00)."""
+    nxt = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    return (nxt - now).total_seconds()
+
+
+async def _scheduler_loop() -> None:
+    while True:
+        await asyncio.sleep(seconds_to_next_hour(datetime.now()))
+        try:
+            push_active_block(_store(), _subs(), _vapid(), datetime.now())
+        except Exception:  # noqa: BLE001 - a bad tick must not kill the loop
+            pass
+
+
+@app.on_event("startup")
+async def _start_scheduler() -> None:
+    app.state.scheduler = asyncio.create_task(_scheduler_loop())
+
+
+@app.on_event("shutdown")
+async def _stop_scheduler() -> None:
+    task = getattr(app.state, "scheduler", None)
+    if task is not None:
+        task.cancel()
