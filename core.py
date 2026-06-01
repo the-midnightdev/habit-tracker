@@ -441,3 +441,20 @@ def resolve_block_start(blocks: list[DayBlock], ref: str) -> str | None:
         if 1 <= row <= len(blocks):
             return blocks[row - 1].start
     return None
+
+
+def _min_of(hm: str) -> int:
+    h, m = hm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def active_block(blocks: list[DayBlock], now_min: int) -> DayBlock | None:
+    """The block to prompt for at now_min: the first non-done block whose
+    half-open interval [start, end) contains now_min. None if nothing is active.
+
+    Mirrors the web app's activeStart() so the server and client agree.
+    """
+    for b in blocks:
+        if b.state != "done" and _min_of(b.start) <= now_min < _min_of(b.end):
+            return b
+    return None

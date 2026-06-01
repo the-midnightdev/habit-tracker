@@ -606,3 +606,27 @@ def test_edit_note_whitespace_text_rejected():
     note = add_note(data, "2026-05-24", "x")
     with pytest.raises(ValidationError):
         edit_note(data, "2026-05-24", note.id, text="   ")
+
+
+def test_active_block_returns_block_containing_now():
+    from core import active_block
+    blocks = [DayBlock("08:00", "09:00", "a"), DayBlock("09:00", "10:00", "b")]
+    assert active_block(blocks, 9 * 60 + 30).start == "09:00"
+
+
+def test_active_block_excludes_done():
+    from core import active_block
+    blocks = [DayBlock("09:00", "10:00", "b", state="done")]
+    assert active_block(blocks, 9 * 60 + 30) is None
+
+
+def test_active_block_none_before_first_block():
+    from core import active_block
+    blocks = [DayBlock("09:00", "10:00", "b")]
+    assert active_block(blocks, 8 * 60) is None
+
+
+def test_active_block_end_is_exclusive():
+    from core import active_block
+    blocks = [DayBlock("09:00", "10:00", "b")]
+    assert active_block(blocks, 10 * 60) is None
