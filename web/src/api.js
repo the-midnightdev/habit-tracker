@@ -56,3 +56,11 @@ export const deleteNote = (date, id) =>
 
 export const dismissReminder = (payload) =>
   request("/api/reminders/dismiss", jsonPost(payload));
+
+export const getPushKey = () => request("/api/push/key");
+
+export const subscribePush = (subscription) =>
+  request("/api/push/subscribe", jsonPost(subscription));
+
+export const unsubscribePush = (endpoint) =>
+  request("/api/push/unsubscribe", jsonPost({ endpoint }));
