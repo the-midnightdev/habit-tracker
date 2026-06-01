@@ -252,3 +252,20 @@ def test_dismiss_missing_reminder_is_noop_204(client):
     resp = client.post("/api/reminders/dismiss",
                        json={"origin_date": "2026-05-24", "kind": "note", "ref": "nope"})
     assert resp.status_code == 204
+
+
+def test_push_key_returns_public_key(client):
+    resp = client.get("/api/push/key")
+    assert resp.status_code == 200
+    assert resp.json()["key"]
+
+
+def test_subscribe_then_unsubscribe(client, data_dir):
+    from push import SubscriptionStore
+
+    sub = {"endpoint": "https://push/abc", "keys": {"p256dh": "p", "auth": "a"}}
+    assert client.post("/api/push/subscribe", json=sub).status_code == 201
+    assert any(s["endpoint"] == "https://push/abc" for s in SubscriptionStore(data_dir).all())
+
+    assert client.post("/api/push/unsubscribe", json={"endpoint": "https://push/abc"}).status_code == 204
+    assert SubscriptionStore(data_dir).all() == []

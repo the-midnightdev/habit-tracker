@@ -29,6 +29,7 @@ from core import (
     set_block_label,
     set_block_state,
 )
+from push import SubscriptionStore, VapidKeys, load_or_create_vapid
 
 DEFAULT_DATA_DIR = Path.home() / ".plan"
 
@@ -42,9 +43,21 @@ app.add_middleware(
 )
 
 
-def _store() -> DataStore:
+def _data_dir() -> Path:
     override = os.environ.get("PLAN_DATA_DIR")
-    return DataStore(Path(override) if override else DEFAULT_DATA_DIR)
+    return Path(override) if override else DEFAULT_DATA_DIR
+
+
+def _store() -> DataStore:
+    return DataStore(_data_dir())
+
+
+def _subs() -> SubscriptionStore:
+    return SubscriptionStore(_data_dir())
+
+
+def _vapid() -> VapidKeys:
+    return load_or_create_vapid(_data_dir())
 
 
 def _day_payload(data, date_iso: str) -> dict:
@@ -92,6 +105,16 @@ class DismissIn(BaseModel):
     origin_date: str
     kind: str
     ref: str
+
+
+class SubscribeIn(BaseModel):
+    endpoint: str
+    keys: dict
+    expirationTime: float | None = None
+
+
+class UnsubscribeIn(BaseModel):
+    endpoint: str
 
 
 @app.get("/api/template")
@@ -211,4 +234,21 @@ def dismiss(payload: DismissIn) -> Response:
     data = store.load()
     dismiss_reminder(data, payload.origin_date, payload.kind, payload.ref)
     store.save(data)
+    return Response(status_code=204)
+
+
+@app.get("/api/push/key")
+def push_key() -> dict:
+    return {"key": _vapid().public_key}
+
+
+@app.post("/api/push/subscribe", status_code=201)
+def push_subscribe(sub: SubscribeIn) -> dict:
+    _subs().add(sub.model_dump())
+    return {"ok": True}
+
+
+@app.post("/api/push/unsubscribe", status_code=204)
+def push_unsubscribe(payload: UnsubscribeIn) -> Response:
+    _subs().remove(payload.endpoint)
     return Response(status_code=204)
