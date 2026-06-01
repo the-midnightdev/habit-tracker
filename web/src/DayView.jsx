@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,9 @@ import { getDay, markBlock, addTemplateBlock, addNote, editNote, deleteNote, dis
 import TimelineBlock from "./TimelineBlock.jsx";
 import DaySidebar from "./DaySidebar.jsx";
 import BlockDialog from "./BlockDialog.jsx";
+import CheckInModal from "./CheckInModal.jsx";
+import { shouldCheckIn, composeCheckIn } from "./lib/checkin.js";
+import { notify, requestPermission } from "./lib/notify.js";
 
 const PX_PER_HR = 64;
 const toLocalISODate = (d) => {
@@ -37,6 +40,20 @@ export default function DayView({ now: nowProp }) {
   const [blocks, setBlocks] = useState([]);
   const [notes, setNotes] = useState([]);
   const [reminders, setReminders] = useState([]);
+  const [checkInOn, setCheckInOn] = useState(() => localStorage?.getItem("checkInOn") === "1");
+  const [checkIn, setCheckIn] = useState(null); // { block, content } when the modal is open
+  const lastStart = useRef(null);
+
+  const toggleCheckIn = async () => {
+    const next = !checkInOn;
+    if (next) await requestPermission();
+    localStorage?.setItem("checkInOn", next ? "1" : "0");
+    setCheckInOn(next);
+  };
+  const onCheckInSave = (label) =>
+    checkIn && onMark(checkIn.block.start, { label });
+  const onCheckInSkip = () =>
+    checkIn && onMark(checkIn.block.start, { state: "skipped" });
 
   const applyDay = (day) => {
     setBlocks(day.blocks);
@@ -63,6 +80,19 @@ export default function DayView({ now: nowProp }) {
   const isToday = date === todayISO;
   const activeKey = isToday ? activeStart(blocks, nowMin) : null;
   const active = blocks.find((b) => b.start === activeKey) ?? null;
+
+  // At the top of each hour, prompt for the now-active block — but only when
+  // enabled, viewing today, and no prompt is already open. shouldCheckIn dedupes
+  // by block start so the 1-second clock fires this at most once per hour.
+  useEffect(() => {
+    if (!checkInOn || !isToday || checkIn) return;
+    if (shouldCheckIn(nowMin, active, lastStart.current)) {
+      lastStart.current = active.start;
+      const content = composeCheckIn(active);
+      notify(content.title, content.question);
+      setCheckIn({ block: active, content });
+    }
+  }, [nowMin, active, checkInOn, isToday, checkIn]);
 
   return (
     <div className="overflow-hidden rounded-2xl border bg-background" style={{ borderColor: PAL.hairline }}>
@@ -122,8 +152,14 @@ export default function DayView({ now: nowProp }) {
           onComplete={(start) => onMark(start, { state: "done" })}
           reminders={reminders} notes={notes}
           onDismissReminder={onDismissReminder} onAddNote={onAddNote}
-          onToggleNoteFlag={onToggleNoteFlag} onDeleteNote={onDeleteNote} />
+          onToggleNoteFlag={onToggleNoteFlag} onDeleteNote={onDeleteNote}
+          checkInOn={checkInOn} onToggleCheckIn={toggleCheckIn} />
       </div>
+      {checkIn && (
+        <CheckInModal open onOpenChange={(o) => !o && setCheckIn(null)}
+          content={checkIn.content} block={checkIn.block}
+          onSave={onCheckInSave} onSkip={onCheckInSkip} />
+      )}
     </div>
   );
 }
