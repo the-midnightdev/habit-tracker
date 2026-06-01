@@ -76,3 +76,63 @@ def test_subscription_store_remove(tmp_path):
 def test_subscription_store_tolerates_corrupt_file(tmp_path):
     (tmp_path / "push_subscriptions.json").write_text("nope", encoding="utf-8")
     assert SubscriptionStore(tmp_path).all() == []
+
+
+from datetime import datetime
+
+from core import DataStore, PlannerData, TemplateBlock
+from push import push_active_block, VapidKeys
+
+
+def _fake_vapid():
+    return VapidKeys(private_pem="x", public_key="y")
+
+
+def _store_with_template(tmp_path):
+    store = DataStore(tmp_path)
+    store.save(PlannerData(template=[TemplateBlock("09:00", "10:00", "work", "Deep work")]))
+    return store
+
+
+def test_push_active_block_sends_to_each_subscription(tmp_path):
+    store = _store_with_template(tmp_path)
+    subs = SubscriptionStore(tmp_path)
+    subs.add({"endpoint": "https://push/1"})
+    subs.add({"endpoint": "https://push/2"})
+    calls = []
+
+    def fake_send(sub, payload, vapid):
+        calls.append((sub["endpoint"], payload))
+
+    sent = push_active_block(store, subs, _fake_vapid(), datetime(2026, 6, 1, 9, 30), send=fake_send)
+    assert sent == 2
+    assert {c[0] for c in calls} == {"https://push/1", "https://push/2"}
+    assert calls[0][1]["start"] == "09:00"
+
+
+def test_push_active_block_no_active_block_sends_nothing(tmp_path):
+    store = _store_with_template(tmp_path)
+    subs = SubscriptionStore(tmp_path)
+    subs.add({"endpoint": "https://push/1"})
+    calls = []
+    sent = push_active_block(
+        store, subs, _fake_vapid(), datetime(2026, 6, 1, 7, 0),
+        send=lambda *a: calls.append(1),
+    )
+    assert sent == 0 and calls == []
+
+
+def test_push_active_block_prunes_gone_subscription(tmp_path):
+    store = _store_with_template(tmp_path)
+    subs = SubscriptionStore(tmp_path)
+    subs.add({"endpoint": "https://push/gone"})
+
+    class Gone(Exception):
+        class response:  # noqa: N801 - mimics WebPushException.response.status_code
+            status_code = 410
+
+    def fake_send(sub, payload, vapid):
+        raise Gone()
+
+    push_active_block(store, subs, _fake_vapid(), datetime(2026, 6, 1, 9, 30), send=fake_send)
+    assert subs.all() == []

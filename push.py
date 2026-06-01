@@ -13,7 +13,9 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from dataclasses import dataclass
 from pathlib import Path
 
-from core import DayBlock
+from datetime import datetime
+
+from core import DataStore, DayBlock, active_block, get_day_blocks
 
 
 def compose_checkin(block: DayBlock) -> dict:
@@ -113,3 +115,41 @@ class SubscriptionStore:
 
     def remove(self, endpoint: str) -> None:
         self._save([s for s in self.all() if s.get("endpoint") != endpoint])
+
+
+def send_push(subscription: dict, payload: dict, vapid: VapidKeys,
+              *, claims_email: str = "admin@example.com") -> int:
+    """Send one web-push. Returns the HTTP status code. Raises (via pywebpush)
+    on failure; callers handle pruning by inspecting exc.response.status_code."""
+    from pywebpush import webpush
+
+    resp = webpush(
+        subscription_info=subscription,
+        data=json.dumps(payload),
+        vapid_private_key=vapid.private_pem,
+        vapid_claims={"sub": f"mailto:{claims_email}"},
+    )
+    return resp.status_code
+
+
+def push_active_block(store: DataStore, subs: SubscriptionStore, vapid: VapidKeys,
+                      now: datetime, *, send=send_push) -> int:
+    """One scheduler tick: if a block is active today, push to all subscriptions.
+    Subscriptions that fail with 404/410 are pruned. Returns the number sent."""
+    data = store.load()
+    date_iso = now.strftime("%Y-%m-%d")
+    now_min = now.hour * 60 + now.minute
+    block = active_block(get_day_blocks(data, date_iso), now_min)
+    if block is None:
+        return 0
+    payload = build_payload(date_iso, block)
+    sent = 0
+    for sub in subs.all():
+        try:
+            send(sub, payload, vapid)
+            sent += 1
+        except Exception as exc:  # noqa: BLE001 - prune gone subs, ignore the rest
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status in (404, 410):
+                subs.remove(sub.get("endpoint", ""))
+    return sent
