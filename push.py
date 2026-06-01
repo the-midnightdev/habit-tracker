@@ -81,3 +81,35 @@ def load_or_create_vapid(directory: Path) -> VapidKeys:
         encoding="utf-8",
     )
     return keys
+
+
+SUBSCRIPTIONS_FILENAME = "push_subscriptions.json"
+
+
+class SubscriptionStore:
+    """Persists browser push subscriptions to a JSON list, keyed by endpoint."""
+
+    def __init__(self, directory: Path):
+        self.path = Path(directory) / SUBSCRIPTIONS_FILENAME
+
+    def all(self) -> list[dict]:
+        if not self.path.exists():
+            return []
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            return raw if isinstance(raw, list) else []
+        except (json.JSONDecodeError, ValueError):
+            return []
+
+    def _save(self, subs: list[dict]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(subs, indent=2), encoding="utf-8")
+
+    def add(self, subscription: dict) -> None:
+        endpoint = subscription.get("endpoint")
+        subs = [s for s in self.all() if s.get("endpoint") != endpoint]
+        subs.append(subscription)
+        self._save(subs)
+
+    def remove(self, endpoint: str) -> None:
+        self._save([s for s in self.all() if s.get("endpoint") != endpoint])

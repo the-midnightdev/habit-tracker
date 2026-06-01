@@ -45,3 +45,34 @@ def test_vapid_regenerates_on_corrupt_file(tmp_path):
     (tmp_path / "vapid.json").write_text("not json", encoding="utf-8")
     k = load_or_create_vapid(tmp_path)
     assert k.public_key
+
+
+from push import SubscriptionStore
+
+
+def test_subscription_store_add_and_all(tmp_path):
+    store = SubscriptionStore(tmp_path)
+    assert store.all() == []
+    store.add({"endpoint": "https://push/1", "keys": {}})
+    assert [s["endpoint"] for s in store.all()] == ["https://push/1"]
+
+
+def test_subscription_store_dedupes_by_endpoint(tmp_path):
+    store = SubscriptionStore(tmp_path)
+    store.add({"endpoint": "https://push/1", "keys": {"a": 1}})
+    store.add({"endpoint": "https://push/1", "keys": {"a": 2}})
+    subs = store.all()
+    assert len(subs) == 1 and subs[0]["keys"] == {"a": 2}
+
+
+def test_subscription_store_remove(tmp_path):
+    store = SubscriptionStore(tmp_path)
+    store.add({"endpoint": "https://push/1"})
+    store.add({"endpoint": "https://push/2"})
+    store.remove("https://push/1")
+    assert [s["endpoint"] for s in store.all()] == ["https://push/2"]
+
+
+def test_subscription_store_tolerates_corrupt_file(tmp_path):
+    (tmp_path / "push_subscriptions.json").write_text("nope", encoding="utf-8")
+    assert SubscriptionStore(tmp_path).all() == []
