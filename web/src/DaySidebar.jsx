@@ -4,6 +4,7 @@ import { PAL } from "./lib/palette.js";
 import { countdown, focusedMinutes, remainingMinutes, minOf } from "./lib/schedule.js";
 import RemindersCard from "./RemindersCard.jsx";
 import NotesCard from "./NotesCard.jsx";
+import CheckInToggle from "./CheckInToggle.jsx";
 
 function fmt(min) {
   const h = Math.floor(min / 60), m = min % 60;
@@ -19,6 +20,7 @@ export default function DaySidebar({
   blocks, active, nowMin, onComplete,
   reminders = [], notes = [],
   onDismissReminder, onAddNote, onToggleNoteFlag, onDeleteNote,
+  checkInOn = false, onToggleCheckIn = () => {},
 }) {
   const done = blocks.filter((b) => b.state === "done").length;
   const total = blocks.length;
@@ -71,6 +73,7 @@ export default function DaySidebar({
           <div className="py-4 text-sm" style={{ color: PAL.muted }}>Nothing active right now.</div>
         )}
       </div>
+      <CheckInToggle enabled={checkInOn} onToggle={onToggleCheckIn} />
       <NotesCard notes={notes} onAdd={onAddNote} onToggleFlag={onToggleNoteFlag} onDelete={onDeleteNote} />
     </div>
   );
