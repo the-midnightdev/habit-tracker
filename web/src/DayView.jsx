@@ -121,6 +121,7 @@ export default function DayView({ now: nowProp }) {
     const onMessage = (event) => {
       const d = event.data;
       if (d && d.type === "checkin-open" && d.block) {
+        if (d.block.date) setDate(d.block.date);
         setCheckIn({
           block: d.block,
           content: {

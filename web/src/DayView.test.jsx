@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import DayView from "./DayView.jsx";
 import * as api from "./api.js";
@@ -96,4 +96,35 @@ test("deleting a note calls the API and reloads", async () => {
   fireEvent.click(await screen.findByRole("button", { name: /delete note/i }));
   await waitFor(() => expect(del).toHaveBeenCalledWith("2026-05-24", "n1"));
   await waitFor(() => expect(screen.queryByText("call Sam")).not.toBeInTheDocument());
+});
+
+test("a service-worker checkin-open message opens the modal on the pushed day", async () => {
+  let swHandler;
+  const swStub = {
+    addEventListener: (type, fn) => { if (type === "message") swHandler = fn; },
+    removeEventListener: () => {},
+  };
+  Object.defineProperty(navigator, "serviceWorker", { value: swStub, configurable: true });
+  try {
+    mockDay([{ start: "09:00", end: "10:00", label: "work", state: "pending", tag: "Deep work" }]);
+    render(<DayView now={FIXED_NOW} />);   // FIXED_NOW is 2026-05-24T14:23:00 (today = 2026-05-24)
+    await screen.findByText("Planner");
+    // Fire a push "open" for a DIFFERENT day than the one being viewed
+    swHandler({ data: { type: "checkin-open", block: { date: "2026-05-20", start: "09:00", end: "10:00", label: "work", tag: "Deep work", title: "09:00 — new hour", question: "What are you working on this hour?" } } });
+    // The jump-to-today button label should now reflect the navigated (pushed) day, not "Today"
+    // (The modal opens at the same time, which sets aria-hidden on the background, so we
+    // must pass hidden:true to find the nav button while the modal is open.)
+    await waitFor(() => {
+      const btn = screen.getByRole("button", { name: /go to today/i, hidden: true });
+      expect(btn.textContent.trim()).not.toBe("Today");
+    });
+  } finally {
+    // Unmount before removing the stub so the SW cleanup effect can call removeEventListener
+    cleanup();
+    try {
+      delete navigator.serviceWorker;
+    } catch {
+      Object.defineProperty(navigator, "serviceWorker", { value: undefined, configurable: true });
+    }
+  }
 });
