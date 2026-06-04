@@ -64,3 +64,23 @@ export const subscribePush = (subscription) =>
 
 export const unsubscribePush = (endpoint) =>
   request("/api/push/unsubscribe", jsonPost({ endpoint }));
+
+export const getOutcomes = () => request("/api/outcomes");
+
+export const createOutcome = (outcome) =>
+  request("/api/outcomes", jsonPost(outcome));
+
+export const updateOutcome = (id, edit) =>
+  request(`/api/outcomes/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(edit),
+  });
+
+export const deleteOutcome = (id) =>
+  request(`/api/outcomes/${id}`, { method: "DELETE" });
+
+export const rateOutcome = (date, id, rating) =>
+  request(`/api/days/${date}/outcomes/${id}`, jsonPost({ rating }));
+
+export const getInsights = (id) => request(`/api/outcomes/${id}/insights`);

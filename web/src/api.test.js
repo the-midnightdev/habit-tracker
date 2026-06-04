@@ -84,3 +84,20 @@ test("unsubscribePush POSTs the endpoint and handles 204", async () => {
   expect(url).toBe("/api/push/unsubscribe");
   expect(JSON.parse(opts.body)).toEqual({ endpoint: "https://push/1" });
 });
+
+import { getOutcomes, createOutcome, updateOutcome, deleteOutcome, rateOutcome, getInsights } from "./api.js";
+
+test("rateOutcome POSTs rating to the day-outcome endpoint", async () => {
+  global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ rating: 4 }) });
+  await rateOutcome("2026-06-04", "o1", 4);
+  expect(global.fetch).toHaveBeenCalledWith(
+    "/api/days/2026-06-04/outcomes/o1",
+    expect.objectContaining({ method: "POST" })
+  );
+});
+
+test("getInsights fetches the insights endpoint", async () => {
+  global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ ready: false }) });
+  await getInsights("o1");
+  expect(global.fetch).toHaveBeenCalledWith("/api/outcomes/o1/insights");
+});
