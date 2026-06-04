@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PAL } from "./lib/palette.js";
 import {
-  getOutcomes, getTemplate, getInsights, createOutcome, updateOutcome,
+  getOutcomes, getTemplate, getInsights, createOutcome, updateOutcome, addTemplateBlock,
 } from "./api.js";
 import InsightCard from "./InsightCard.jsx";
 import OutcomeWizard from "./OutcomeWizard.jsx";
@@ -66,7 +66,7 @@ export default function OutcomesView() {
         ))
       )}
 
-      <OutcomeWizard open={wizardOpen} onOpenChange={setWizardOpen} blocks={blocks} onCreate={onCreate} />
+      <OutcomeWizard open={wizardOpen} onOpenChange={setWizardOpen} blocks={blocks} onCreate={onCreate} onAddBlock={(form) => addTemplateBlock(form)} />
     </div>
   );
 }
