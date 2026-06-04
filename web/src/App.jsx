@@ -2,6 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import DayView from "./DayView.jsx";
 import TemplateEditor from "./TemplateEditor.jsx";
+import OutcomesView from "./OutcomesView.jsx";
 
 export default function App() {
   return (
@@ -11,12 +12,16 @@ export default function App() {
         <TabsList className="mb-4">
           <TabsTrigger value="day">Day</TabsTrigger>
           <TabsTrigger value="template">Template</TabsTrigger>
+          <TabsTrigger value="outcomes">Outcomes</TabsTrigger>
         </TabsList>
         <TabsContent value="day">
           <DayView />
         </TabsContent>
         <TabsContent value="template">
           <TemplateEditor />
+        </TabsContent>
+        <TabsContent value="outcomes">
+          <OutcomesView />
         </TabsContent>
       </Tabs>
       <Toaster richColors position="top-center" />
