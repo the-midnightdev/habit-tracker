@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 DATA_FILENAME = "data.json"
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 STATES = ("pending", "done", "skipped")
 TAGS = ("Deep work", "Break", "Shallow")
 
@@ -41,6 +41,7 @@ class TemplateBlock:
     end: str
     label: str
     tag: str | None = None
+    id: str = ""
 
 
 @dataclass
@@ -73,9 +74,27 @@ class Note:
 
 
 @dataclass
+class Outcome:
+    id: str
+    name: str
+    description: str
+    direction: str            # "increase" | "decrease"
+    created: str              # ISO date
+    status: str = "active"    # "active" | "archived"
+    block_ids: list[str] = field(default_factory=list)
+
+
+@dataclass
+class OutcomeCheckin:
+    rating: int               # 1..5, higher = better
+    at: str                   # ISO-8601 timestamp
+
+
+@dataclass
 class Day:
     overrides: dict[str, Override] = field(default_factory=dict)
     notes: list[Note] = field(default_factory=list)
+    outcome_checkins: dict[str, OutcomeCheckin] = field(default_factory=dict)
 
 
 @dataclass
@@ -93,6 +112,7 @@ class Reminder:
 class PlannerData:
     template: list[TemplateBlock] = field(default_factory=list)
     days: dict[str, Day] = field(default_factory=dict)
+    outcomes: list[Outcome] = field(default_factory=list)
 
 
 def _migrate_v2_days(raw_days: dict, template: list[TemplateBlock]) -> dict[str, Day]:
@@ -120,7 +140,10 @@ def _migrate_v2_days(raw_days: dict, template: list[TemplateBlock]) -> dict[str,
 def _load_day(day: dict) -> Day:
     overrides = {start: Override(**ov) for start, ov in day["overrides"].items()}
     notes = [Note(**n) for n in day.get("notes", [])]
-    return Day(overrides=overrides, notes=notes)
+    checkins = {
+        oid: OutcomeCheckin(**c) for oid, c in day.get("outcome_checkins", {}).items()
+    }
+    return Day(overrides=overrides, notes=notes, outcome_checkins=checkins)
 
 
 class DataStore:
@@ -138,14 +161,19 @@ class DataStore:
             if not isinstance(raw, dict):
                 raise ValueError("root is not an object")
             version = raw.get("version")
-            template = [TemplateBlock(**b) for b in raw["template"]]
-            if version in (3, 4):
+            raw_template = raw["template"]
+            template = [TemplateBlock(**b) for b in raw_template]
+            for b, rb in zip(template, raw_template):
+                if "id" not in rb:
+                    b.id = uuid.uuid4().hex
+            if version in (3, 4, 5):
                 days = {d: _load_day(day) for d, day in raw["days"].items()}
             elif version == 2:
                 days = _migrate_v2_days(raw["days"], template)
             else:
                 raise ValueError(f"unsupported schema version: {version!r}")
-            return PlannerData(template=template, days=days)
+            outcomes = [Outcome(**o) for o in raw.get("outcomes", [])]
+            return PlannerData(template=template, days=days, outcomes=outcomes)
         except (json.JSONDecodeError, ValueError, TypeError, KeyError):
             backup = self._backup_corrupt()
             if on_corrupt is not None:
@@ -156,7 +184,7 @@ class DataStore:
         self.directory.mkdir(parents=True, exist_ok=True)
         days_payload = {}
         for d, day in data.days.items():
-            if not day.overrides and not day.notes:
+            if not day.overrides and not day.notes and not day.outcome_checkins:
                 continue  # don't persist empty days (defensive; _prune removes them)
             overrides = {}
             for start, ov in day.overrides.items():
@@ -174,11 +202,16 @@ class DataStore:
                     {"id": n.id, "text": n.text, **({"flagged": True} if n.flagged else {})}
                     for n in day.notes
                 ]
+            if day.outcome_checkins:
+                day_payload["outcome_checkins"] = {
+                    oid: asdict(c) for oid, c in day.outcome_checkins.items()
+                }
             days_payload[d] = day_payload
         payload = {
             "version": SCHEMA_VERSION,
             "template": [asdict(b) for b in data.template],
             "days": days_payload,
+            "outcomes": [asdict(o) for o in data.outcomes],
         }
         self.path.write_text(
             json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -223,7 +256,7 @@ def add_template_block(
 ) -> TemplateBlock:
     _check_template_slot(data, start, end)
     validate_tag(tag)
-    block = TemplateBlock(start=start, end=end, label=label, tag=tag)
+    block = TemplateBlock(start=start, end=end, label=label, tag=tag, id=uuid.uuid4().hex)
     data.template.append(block)
     data.template.sort(key=lambda b: b.start)
     return block
@@ -319,7 +352,7 @@ def _prune(data: PlannerData, date_iso: str, start: str) -> None:
         and not ov.flagged
     ):
         del day.overrides[start]
-    if not day.overrides and not day.notes:
+    if not day.overrides and not day.notes and not day.outcome_checkins:
         data.days.pop(date_iso, None)
 
 
@@ -396,7 +429,7 @@ def remove_note(data: PlannerData, date_iso: str, note_id: str) -> bool:
     if note is None:
         return False
     day.notes.remove(note)
-    if not day.overrides and not day.notes:
+    if not day.overrides and not day.notes and not day.outcome_checkins:
         data.days.pop(date_iso, None)
     return True
 

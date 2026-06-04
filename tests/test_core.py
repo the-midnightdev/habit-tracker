@@ -630,3 +630,39 @@ def test_active_block_end_is_exclusive():
     from core import active_block
     blocks = [DayBlock("09:00", "10:00", "b")]
     assert active_block(blocks, 10 * 60) is None
+
+
+from core import Outcome, OutcomeCheckin
+
+
+def test_add_template_block_assigns_stable_id(data_dir: Path):
+    data = PlannerData()
+    block = add_template_block(data, "08:00", "09:00", "standup")
+    assert block.id  # non-empty
+    assert find_template_block(data, "08:00").id == block.id
+
+
+def test_v4_file_migrates_assigning_block_ids_and_outcomes(data_dir: Path):
+    (data_dir / "data.json").write_text(json.dumps({
+        "version": 4,
+        "template": [{"start": "08:00", "end": "09:00", "label": "standup", "tag": None}],
+        "days": {},
+    }), encoding="utf-8")
+    data = DataStore(data_dir).load()
+    assert len(data.template) == 1
+    assert data.template[0].id          # id backfilled
+    assert data.outcomes == []          # initialised
+
+
+def test_outcomes_and_checkins_round_trip(data_dir: Path):
+    data = PlannerData(
+        template=[TemplateBlock(start="08:00", end="09:00", label="walk", id="b1")],
+        outcomes=[Outcome(id="o1", name="More energy", description="",
+                          direction="increase", created="2026-06-01",
+                          status="active", block_ids=["b1"])],
+        days={"2026-06-02": Day(
+            outcome_checkins={"o1": OutcomeCheckin(rating=4, at="2026-06-02T20:00:00")}
+        )},
+    )
+    DataStore(data_dir).save(data)
+    assert DataStore(data_dir).load() == data
