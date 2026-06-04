@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import DayView from "./DayView.jsx";
 import * as api from "./api.js";
+import { rateOutcome } from "./api.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -10,6 +11,10 @@ const FIXED_NOW = new Date("2026-05-24T14:23:00");
 function mockDay(blocks) {
   vi.spyOn(api, "getDay").mockResolvedValue({ date: "2026-05-24", blocks });
 }
+
+beforeEach(() => {
+  vi.spyOn(api, "getOutcomes").mockResolvedValue([]);
+});
 
 test("renders blocks, progress count, and the active countdown", async () => {
   mockDay([
@@ -96,6 +101,18 @@ test("deleting a note calls the API and reloads", async () => {
   fireEvent.click(await screen.findByRole("button", { name: /delete note/i }));
   await waitFor(() => expect(del).toHaveBeenCalledWith("2026-05-24", "n1"));
   await waitFor(() => expect(screen.queryByText("call Sam")).not.toBeInTheDocument());
+});
+
+test("rates an active outcome from the day view", async () => {
+  mockDay([]);
+  vi.spyOn(api, "getOutcomes").mockResolvedValue([
+    { id: "o1", name: "More energy", status: "active", todayRating: null },
+  ]);
+  vi.spyOn(api, "rateOutcome").mockResolvedValue({ rating: 4 });
+  render(<DayView now={new Date("2026-05-24T14:23:00")} />);
+  await screen.findByText("More energy");
+  fireEvent.click(screen.getByLabelText("rate More energy 4"));
+  await waitFor(() => expect(rateOutcome).toHaveBeenCalledWith("2026-05-24", "o1", 4));
 });
 
 test("a service-worker checkin-open message opens the modal on the pushed day", async () => {

@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PAL } from "./lib/palette.js";
 import { axisRange, activeStart } from "./lib/schedule.js";
-import { getDay, markBlock, addTemplateBlock, addNote, editNote, deleteNote, dismissReminder } from "./api.js";
+import { getDay, markBlock, addTemplateBlock, addNote, editNote, deleteNote, dismissReminder, getOutcomes, rateOutcome } from "./api.js";
 import TimelineBlock from "./TimelineBlock.jsx";
 import DaySidebar from "./DaySidebar.jsx";
+import OutcomeCheckinCard from "./OutcomeCheckinCard.jsx";
+import EndOfDayReview from "./EndOfDayReview.jsx";
 import BlockDialog from "./BlockDialog.jsx";
 import CheckInModal from "./CheckInModal.jsx";
 import { shouldCheckIn, composeCheckIn } from "./lib/checkin.js";
@@ -83,6 +85,14 @@ export default function DayView({ now: nowProp }) {
   };
   const load = (d) => getDay(d).then(applyDay).catch((e) => toast.error(e.message));
   useEffect(() => { load(date); }, [date]);
+
+  const [outcomes, setOutcomes] = useState([]);
+  const loadOutcomes = () =>
+    getOutcomes().then(setOutcomes).catch((e) => toast.error(e.message));
+  useEffect(() => { loadOutcomes(); }, [date]);
+
+  const onRateOutcome = (id, rating) =>
+    rateOutcome(date, id, rating).then(loadOutcomes).catch((e) => toast.error(e.message));
 
   const onMark = (start, mark) =>
     markBlock(date, start, mark).then(applyDay).catch((e) => toast.error(e.message));
@@ -190,12 +200,16 @@ export default function DayView({ now: nowProp }) {
             </div>
           )}
         </div>
-        <DaySidebar blocks={blocks} active={active} nowMin={nowMin}
-          onComplete={(start) => onMark(start, { state: "done" })}
-          reminders={reminders} notes={notes}
-          onDismissReminder={onDismissReminder} onAddNote={onAddNote}
-          onToggleNoteFlag={onToggleNoteFlag} onDeleteNote={onDeleteNote}
-          checkInOn={checkInOn} onToggleCheckIn={toggleCheckIn} />
+        <div className="space-y-4 p-4">
+          {isToday && <OutcomeCheckinCard outcomes={outcomes} onRate={onRateOutcome} />}
+          <DaySidebar blocks={blocks} active={active} nowMin={nowMin}
+            onComplete={(start) => onMark(start, { state: "done" })}
+            reminders={reminders} notes={notes}
+            onDismissReminder={onDismissReminder} onAddNote={onAddNote}
+            onToggleNoteFlag={onToggleNoteFlag} onDeleteNote={onDeleteNote}
+            checkInOn={checkInOn} onToggleCheckIn={toggleCheckIn} />
+          {isToday && <EndOfDayReview blocks={blocks} onMark={onMark} />}
+        </div>
       </div>
       {checkIn && (
         <CheckInModal open onOpenChange={(o) => !o && setCheckIn(null)}
