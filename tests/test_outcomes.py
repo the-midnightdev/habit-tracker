@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 from core import PlannerData, TemplateBlock, Outcome, Day, OutcomeCheckin, Override, add_outcome, add_template_block, set_outcome_rating
-from outcomes import trailing_window, pearson, block_done, confidence, MIN_DAYS, candidate_signals, select_signal, phrase, build_insight, Signal
+from outcomes import trailing_window, pearson, block_done, confidence, MIN_DAYS, candidate_signals, select_signal, phrase, build_insight, Signal, _when
 
 
 _CAUSAL = ["cause", "because", "improve", "proven", "makes you", "guarantee"]
@@ -153,3 +153,53 @@ def test_build_insight_null_result_is_empathetic():
     assert card["meanDelta"] is None
     assert "No clear pattern yet" in card["headline"]
     assert card["suggestion"]["action"] == "tweak"
+
+
+def test_when_phrasing_for_new_kinds():
+    from outcomes import _when, Signal
+    assert _when(Signal("afternoon_weekly", "afternoon blocks", 0, 3, 0, 0.5, 5, None)) == "on weeks with 3+ afternoon blocks"
+    assert _when(Signal("evening_weekly", "evening blocks", 0, 2, 0, 0.5, 5, None)) == "on weeks with 2+ evening blocks"
+    assert _when(Signal("dow_daily", "Saturday", 0, 1, 0, 0.5, 5, None)) == "on Saturdays"
+    assert _when(Signal("duration_daily", "block time", 0, 90, 0, 0.5, 5, None)) == "on days with over 1.5h of your blocks"
+
+
+def test_candidate_signals_detects_day_of_week():
+    data = PlannerData()
+    o = add_outcome(data, "Mood", "", "increase", created="2026-04-01")
+    base = date(2026, 6, 4)
+    for i in range(21):
+        d = (base - timedelta(days=i)).isoformat()
+        wd = date.fromisoformat(d).weekday()
+        set_outcome_rating(data, d, o.id, 5 if wd == 5 else 2, "t")  # Saturdays high
+    sigs = [s for s in candidate_signals(data, o, base) if s.kind == "dow_daily"]
+    assert any(s.label == "Saturday" and s.mean_delta > 0 for s in sigs)
+
+
+def test_candidate_signals_detects_duration():
+    data = PlannerData()
+    b = add_template_block(data, "08:00", "12:00", "long block")  # 4h block
+    o = add_outcome(data, "Energy", "", "increase", block_ids=[b.id], created="2026-04-01")
+    base = date(2026, 6, 4)
+    for i in range(21):
+        d = (base - timedelta(days=i)).isoformat()
+        done = i % 2 == 0
+        if done:
+            data.days.setdefault(d, Day()).overrides["08:00"] = Override(state="done")
+        set_outcome_rating(data, d, o.id, 5 if done else 2, "t")
+    sigs = [s for s in candidate_signals(data, o, base) if s.kind == "duration_daily"]
+    assert sigs and max(sigs, key=lambda s: s.strength).mean_delta > 0
+
+
+def test_candidate_signals_detects_evening_bucket():
+    data = PlannerData()
+    b = add_template_block(data, "21:00", "22:00", "late work")  # evening block
+    o = add_outcome(data, "Sleep", "", "increase", block_ids=[b.id], created="2026-04-01")
+    base = date(2026, 6, 4)
+    for i in range(28):
+        d = (base - timedelta(days=i)).isoformat()
+        done = i % 2 == 0
+        if done:
+            data.days.setdefault(d, Day()).overrides["21:00"] = Override(state="done")
+        set_outcome_rating(data, d, o.id, 2 if done else 5, "t")  # late work -> worse sleep
+    sigs = [s for s in candidate_signals(data, o, base) if s.kind == "evening_weekly"]
+    assert sigs  # an evening-bucket weekly signal is produced

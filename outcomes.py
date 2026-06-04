@@ -130,6 +130,18 @@ def _iso_week(date_iso: str):
     return date.fromisoformat(date_iso).isocalendar()[:2]
 
 
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def _weekday(date_iso: str) -> int:
+    return date.fromisoformat(date_iso).weekday()
+
+
+def _duration_done(data: PlannerData, date_iso: str, blocks) -> float:
+    return float(sum(_min_of(b.end) - _min_of(b.start)
+                     for b in blocks if block_done(data, date_iso, b.start)))
+
+
 def _weekly_pairs(dates, ratings, counter) -> list[tuple[float, float]]:
     weeks: dict = {}
     for d in dates:
@@ -186,6 +198,32 @@ def candidate_signals(data: PlannerData, outcome: Outcome, today: date) -> list[
         if s:
             signals.append(s)
 
+    # Weekly: afternoon / evening linked-block completions vs weekly mean rating.
+    for bucket_name, lo, hi in (("afternoon", 12 * 60, 17 * 60), ("evening", 17 * 60, 24 * 60)):
+        bucket = [b for b in blocks if lo <= _min_of(b.start) < hi]
+        if bucket:
+            pairs = _weekly_pairs(
+                all_dates, ratings,
+                lambda d, bucket=bucket: sum(1 for b in bucket if block_done(data, d, b.start)),
+            )
+            s = _signal(f"{bucket_name}_weekly", f"{bucket_name} blocks", 0, None, pairs)
+            if s:
+                signals.append(s)
+
+    # Daily: total honored block-duration (minutes) at lags 0/1/2.
+    for lag in LAGS:
+        pairs = [(_duration_done(data, _shift(d, -lag), blocks), float(ratings[d])) for d in rating_days]
+        s = _signal("duration_daily", "block time", lag, None, pairs)
+        if s:
+            signals.append(s)
+
+    # Daily: day-of-week effect (one binary feature per weekday present in the data).
+    for wd in sorted({_weekday(d) for d in rating_days}):
+        pairs = [(1.0 if _weekday(d) == wd else 0.0, float(ratings[d])) for d in rating_days]
+        s = _signal("dow_daily", WEEKDAYS[wd], 0, None, pairs)
+        if s:
+            signals.append(s)
+
     return signals
 
 
@@ -207,6 +245,12 @@ def _when(s: Signal) -> str:
     if s.kind == "late_end_daily":
         hh = int(s.threshold) // 60
         return f"on days with blocks ending after {hh:02d}:00"
+    if s.kind in ("afternoon_weekly", "evening_weekly"):
+        return f"on weeks with {int(s.threshold)}+ {s.label}"
+    if s.kind == "dow_daily":
+        return f"on {s.label}s"
+    if s.kind == "duration_daily":
+        return f"on days with over {s.threshold / 60:.1f}h of your blocks"
     return ""
 
 
