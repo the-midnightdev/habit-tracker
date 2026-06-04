@@ -277,3 +277,33 @@ def test_seconds_to_next_hour():
 
     assert seconds_to_next_hour(datetime(2026, 6, 1, 9, 0, 0)) == 3600
     assert seconds_to_next_hour(datetime(2026, 6, 1, 9, 59, 0)) == 60
+
+
+def test_outcome_crud_and_rating(client):
+    blk = client.post("/api/template", json={"start": "08:00", "end": "09:00", "label": "walk"}).json()
+    r = client.post("/api/outcomes", json={
+        "name": "More energy", "description": "", "direction": "increase",
+        "block_ids": [blk["id"]]})
+    assert r.status_code == 201
+    oid = r.json()["id"]
+    listed = client.get("/api/outcomes").json()
+    assert listed[0]["id"] == oid and listed[0]["checkedToday"] is False
+    today = __import__("datetime").date.today().isoformat()
+    rr = client.post(f"/api/days/{today}/outcomes/{oid}", json={"rating": 4})
+    assert rr.status_code == 200 and rr.json()["rating"] == 4
+    assert client.get("/api/outcomes").json()[0]["todayRating"] == 4
+    assert client.put(f"/api/outcomes/{oid}", json={"status": "archived"}).status_code == 200
+    assert client.delete(f"/api/outcomes/{oid}").status_code == 204
+
+
+def test_outcome_bad_input_and_missing(client):
+    assert client.post("/api/outcomes", json={"name": "x", "direction": "sideways"}).status_code == 400
+    assert client.get("/api/outcomes/nope/insights").status_code == 404
+    assert client.put("/api/outcomes/nope", json={"name": "y"}).status_code == 404
+
+
+def test_insights_returns_confidence_meter_when_sparse(client):
+    r = client.post("/api/outcomes", json={"name": "Energy", "direction": "increase"})
+    oid = r.json()["id"]
+    card = client.get(f"/api/outcomes/{oid}/insights").json()
+    assert card["ready"] is False and card["daysChecked"] == 0

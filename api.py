@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import asdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
@@ -15,22 +15,28 @@ from core import (
     DataStore,
     ValidationError,
     add_note,
+    add_outcome,
     add_template_block,
     dismiss_reminder,
     edit_note,
+    edit_outcome,
     edit_template_block,
     find_note,
+    find_outcome,
     find_template_block,
     get_day_blocks,
     get_reminders,
     history_dates,
     remove_note,
+    remove_outcome,
     remove_template_block,
     set_block_comment,
     set_block_flag,
     set_block_label,
     set_block_state,
+    set_outcome_rating,
 )
+from outcomes import build_insight
 from push import SubscriptionStore, VapidKeys, load_or_create_vapid, push_active_block
 
 DEFAULT_DATA_DIR = Path.home() / ".plan"
@@ -117,6 +123,25 @@ class SubscribeIn(BaseModel):
 
 class UnsubscribeIn(BaseModel):
     endpoint: str
+
+
+class OutcomeIn(BaseModel):
+    name: str
+    description: str = ""
+    direction: str
+    block_ids: list[str] = []
+
+
+class OutcomeEdit(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    direction: str | None = None
+    status: str | None = None
+    block_ids: list[str] | None = None
+
+
+class RatingIn(BaseModel):
+    rating: int
 
 
 @app.get("/api/template")
@@ -237,6 +262,81 @@ def dismiss(payload: DismissIn) -> Response:
     dismiss_reminder(data, payload.origin_date, payload.kind, payload.ref)
     store.save(data)
     return Response(status_code=204)
+
+
+@app.get("/api/outcomes")
+def list_outcomes() -> list[dict]:
+    data = _store().load()
+    today = date.today().isoformat()
+    day = data.days.get(today)
+    out = []
+    for o in data.outcomes:
+        ci = day.outcome_checkins.get(o.id) if day else None
+        out.append({**asdict(o),
+                    "checkedToday": ci is not None,
+                    "todayRating": ci.rating if ci else None})
+    return out
+
+
+@app.post("/api/outcomes", status_code=201)
+def create_outcome(payload: OutcomeIn) -> dict:
+    store = _store()
+    data = store.load()
+    try:
+        created = add_outcome(data, payload.name, payload.description, payload.direction,
+                              block_ids=payload.block_ids, created=date.today().isoformat())
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    store.save(data)
+    return asdict(created)
+
+
+@app.put("/api/outcomes/{outcome_id}")
+def update_outcome(outcome_id: str, edit: OutcomeEdit) -> dict:
+    store = _store()
+    data = store.load()
+    if find_outcome(data, outcome_id) is None:
+        raise HTTPException(status_code=404, detail=f"no outcome {outcome_id!r}")
+    try:
+        updated = edit_outcome(data, outcome_id, name=edit.name, description=edit.description,
+                               direction=edit.direction, status=edit.status, block_ids=edit.block_ids)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    store.save(data)
+    return asdict(updated)
+
+
+@app.delete("/api/outcomes/{outcome_id}", status_code=204)
+def delete_outcome(outcome_id: str) -> Response:
+    store = _store()
+    data = store.load()
+    if not remove_outcome(data, outcome_id):
+        raise HTTPException(status_code=404, detail=f"no outcome {outcome_id!r}")
+    store.save(data)
+    return Response(status_code=204)
+
+
+@app.post("/api/days/{date_iso}/outcomes/{outcome_id}")
+def rate_outcome(date_iso: str, outcome_id: str, body: RatingIn) -> dict:
+    store = _store()
+    data = store.load()
+    if find_outcome(data, outcome_id) is None:
+        raise HTTPException(status_code=404, detail=f"no outcome {outcome_id!r}")
+    try:
+        ci = set_outcome_rating(data, date_iso, outcome_id, body.rating, datetime.now().isoformat())
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    store.save(data)
+    return {"rating": ci.rating, "at": ci.at}
+
+
+@app.get("/api/outcomes/{outcome_id}/insights")
+def outcome_insights(outcome_id: str) -> dict:
+    data = _store().load()
+    o = find_outcome(data, outcome_id)
+    if o is None:
+        raise HTTPException(status_code=404, detail=f"no outcome {outcome_id!r}")
+    return build_insight(data, o, date.today())
 
 
 @app.get("/api/push/key")
