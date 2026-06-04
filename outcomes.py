@@ -1,6 +1,7 @@
 """Pure, on-demand insights engine for Outcomes. No IO, no globals mutated."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, timedelta
 
 from core import PlannerData, Outcome, linked_blocks
@@ -81,3 +82,108 @@ def confidence(data: PlannerData, outcome: Outcome, today: date) -> dict:
         "completions": completions,
         "ready": days_checked >= MIN_DAYS and completions >= MIN_COMPLETIONS,
     }
+
+
+@dataclass
+class Signal:
+    kind: str            # block_daily | late_end_daily | block_weekly | morning_weekly
+    label: str
+    lag: int
+    threshold: float     # group-split boundary used for phrasing
+    mean_delta: float    # mean(rating | high group) - mean(rating | low group)
+    strength: float      # |pearson r|
+    n: int
+    block_id: str | None
+
+
+def _split_delta(pairs: list[tuple[float, float]]) -> tuple[float, float] | None:
+    """Split pairs at mean(x); return (mean_delta, min-x-of-high-group)."""
+    mx = _mean([x for x, _ in pairs])
+    high = [y for x, y in pairs if x > mx]
+    low = [y for x, y in pairs if x <= mx]
+    if not high or not low:
+        return None
+    threshold = min(x for x, _ in pairs if x > mx)
+    return _mean(high) - _mean(low), threshold
+
+
+def _signal(kind, label, lag, block_id, pairs) -> Signal | None:
+    r = pearson([x for x, _ in pairs], [y for _, y in pairs])
+    if r is None:
+        return None
+    if abs(r) < MIN_STRENGTH:
+        return None
+    sd = _split_delta(pairs)
+    if sd is None:
+        return None
+    delta, threshold = sd
+    return Signal(kind=kind, label=label, lag=lag, threshold=threshold,
+                  mean_delta=delta, strength=abs(r), n=len(pairs), block_id=block_id)
+
+
+def _latest_end(data: PlannerData, date_iso: str, blocks) -> float:
+    ends = [_min_of(b.end) for b in blocks if block_done(data, date_iso, b.start)]
+    return float(max(ends)) if ends else 0.0
+
+
+def _iso_week(date_iso: str):
+    return date.fromisoformat(date_iso).isocalendar()[:2]
+
+
+def _weekly_pairs(dates, ratings, counter) -> list[tuple[float, float]]:
+    weeks: dict = {}
+    for d in dates:
+        w = weeks.setdefault(_iso_week(d), {"ratings": [], "count": 0})
+        if d in ratings:
+            w["ratings"].append(ratings[d])
+        w["count"] += counter(d)
+    return [(float(w["count"]), _mean(w["ratings"])) for w in weeks.values() if w["ratings"]]
+
+
+def candidate_signals(data: PlannerData, outcome: Outcome, today: date) -> list[Signal]:
+    start, end = trailing_window(today)
+    ratings = _ratings_by_date(data, outcome, start, end)
+    rating_days = sorted(ratings)
+    if not rating_days:
+        return []
+    blocks = linked_blocks(data, outcome)
+    all_dates = list(_dates_in(start, end))
+    signals: list[Signal] = []
+
+    # Daily: per-block adherence at lags 0/1/2.
+    for b in blocks:
+        for lag in LAGS:
+            pairs = [
+                (1.0 if block_done(data, _shift(d, -lag), b.start) else 0.0, float(ratings[d]))
+                for d in rating_days
+            ]
+            s = _signal("block_daily", b.label, lag, b.id, pairs)
+            if s:
+                signals.append(s)
+
+    # Daily: latest honored end-time at lags 0/1/2.
+    for lag in LAGS:
+        pairs = [(_latest_end(data, _shift(d, -lag), blocks), float(ratings[d])) for d in rating_days]
+        s = _signal("late_end_daily", "blocks ending late", lag, None, pairs)
+        if s:
+            signals.append(s)
+
+    # Weekly: per-block completion frequency vs weekly mean rating.
+    for b in blocks:
+        pairs = _weekly_pairs(all_dates, ratings, lambda d, b=b: 1 if block_done(data, d, b.start) else 0)
+        s = _signal("block_weekly", b.label, 0, b.id, pairs)
+        if s:
+            signals.append(s)
+
+    # Weekly: morning linked-block completions vs weekly mean rating.
+    morning = [b for b in blocks if _min_of(b.start) < 12 * 60]
+    if morning:
+        pairs = _weekly_pairs(
+            all_dates, ratings,
+            lambda d: sum(1 for b in morning if block_done(data, d, b.start)),
+        )
+        s = _signal("morning_weekly", "morning blocks", 0, None, pairs)
+        if s:
+            signals.append(s)
+
+    return signals
