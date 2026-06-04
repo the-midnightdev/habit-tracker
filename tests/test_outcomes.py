@@ -1,7 +1,10 @@
 from datetime import date, timedelta
 
 from core import PlannerData, TemplateBlock, Outcome, Day, OutcomeCheckin, Override, add_outcome, add_template_block, set_outcome_rating
-from outcomes import trailing_window, pearson, block_done, confidence, MIN_DAYS, candidate_signals
+from outcomes import trailing_window, pearson, block_done, confidence, MIN_DAYS, candidate_signals, select_signal, phrase, build_insight, Signal
+
+
+_CAUSAL = ["cause", "because", "improve", "proven", "makes you", "guarantee"]
 
 
 def test_trailing_window_is_six_weeks_inclusive():
@@ -95,3 +98,58 @@ def test_candidate_signals_single_block_lagged_off_history_no_crash():
     # window start has no prior data; lag 1/2 reach off the edge — must not raise
     signals = candidate_signals(data, o, date(2026, 6, 4))
     assert all(s.lag in (0, 1, 2) for s in signals)
+
+
+def test_phrase_is_cautious_and_non_causal():
+    s = Signal(kind="block_daily", label="deep work", lag=0, threshold=1.0,
+               mean_delta=1.2, strength=0.7, n=20, block_id="b1")
+    card = phrase(s, Outcome(id="o1", name="Energy", description="",
+                             direction="increase", created="x", status="active", block_ids=["b1"]))
+    assert "Energy averaged +1.2" in card["headline"]
+    assert "deep work" in card["headline"]
+    assert card["suggestion"]["action"] == "keep"
+    text = (card["headline"] + " " + card["suggestion"]["text"]).lower()
+    assert not any(w in text for w in _CAUSAL)
+
+
+def test_phrase_negative_late_end_suggests_tweak():
+    s = Signal(kind="late_end_daily", label="blocks ending late", lag=0, threshold=21 * 60,
+               mean_delta=-0.8, strength=0.6, n=20, block_id=None)
+    card = phrase(s, Outcome(id="o1", name="Sleep", description="",
+                             direction="increase", created="x", status="active", block_ids=[]))
+    assert "ran lower" in card["headline"]
+    assert "after 21:00" in card["headline"]
+    assert card["suggestion"]["action"] == "tweak"
+
+
+def test_select_signal_picks_strongest_over_threshold():
+    weak = Signal("block_daily", "a", 0, 1.0, 0.5, 0.2, 20, "b1")
+    strong = Signal("block_daily", "b", 0, 1.0, 0.9, 0.7, 20, "b2")
+    assert select_signal([weak, strong]) is strong
+    assert select_signal([weak]) is None        # below MIN_STRENGTH
+
+
+def test_build_insight_returns_meter_below_threshold():
+    data = PlannerData(outcomes=[Outcome(id="o1", name="Energy", description="",
+                       direction="increase", created="x", status="active", block_ids=[])])
+    card = build_insight(data, data.outcomes[0], date(2026, 6, 4))
+    assert card["ready"] is False
+    assert card["headline"] is None
+
+
+def test_build_insight_null_result_is_empathetic():
+    # Enough data to be "ready", but ratings are noise vs adherence -> no signal.
+    data = PlannerData()
+    b = add_template_block(data, "08:00", "09:00", "walk")
+    o = add_outcome(data, "Energy", "", "increase", block_ids=[b.id], created="2026-04-01")
+    base = date(2026, 6, 4)
+    for i in range(21):
+        d = (base - timedelta(days=i)).isoformat()
+        if i % 2 == 0:
+            data.days.setdefault(d, Day()).overrides["08:00"] = Override(state="done")
+        set_outcome_rating(data, d, o.id, 3, "t")   # constant rating -> zero variance
+    card = build_insight(data, o, base)
+    assert card["ready"] is True
+    assert card["meanDelta"] is None
+    assert "No clear pattern yet" in card["headline"]
+    assert card["suggestion"]["action"] == "tweak"

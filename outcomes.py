@@ -187,3 +187,59 @@ def candidate_signals(data: PlannerData, outcome: Outcome, today: date) -> list[
             signals.append(s)
 
     return signals
+
+
+def select_signal(signals: list[Signal]) -> Signal | None:
+    eligible = [s for s in signals if s.strength >= MIN_STRENGTH and s.n >= 3]
+    if not eligible:
+        return None
+    return max(eligible, key=lambda s: (s.strength, s.n))
+
+
+def _when(s: Signal) -> str:
+    if s.kind == "block_daily":
+        return (f"on days you completed {s.label}" if s.lag == 0
+                else f"the day after you completed {s.label}")
+    if s.kind == "block_weekly":
+        return f"on weeks with {int(s.threshold)}+ {s.label}"
+    if s.kind == "morning_weekly":
+        return f"on weeks with {int(s.threshold)}+ morning blocks"
+    if s.kind == "late_end_daily":
+        hh = int(s.threshold) // 60
+        return f"on days with blocks ending after {hh:02d}:00"
+    return ""
+
+
+def phrase(s: Signal, outcome: Outcome) -> dict:
+    delta = round(s.mean_delta, 1)
+    sign = f"+{delta:.1f}" if delta >= 0 else f"{delta:.1f}"
+    when = _when(s)
+    if delta >= 0:
+        headline = f"{outcome.name} averaged {sign} {when}."
+        suggestion = {"action": "keep", "blockId": s.block_id,
+                      "text": "These seem to go together — worth keeping."}
+    else:
+        headline = f"{outcome.name} ran lower {when} — a signal worth watching."
+        if s.kind == "late_end_daily":
+            suggestion = {"action": "tweak", "blockId": None,
+                          "text": "Try moving these earlier and watch for two weeks."}
+        else:
+            suggestion = {"action": "tweak", "blockId": s.block_id,
+                          "text": "Try tweaking or dropping this one and watch for two weeks."}
+    return {"headline": headline, "meanDelta": delta, "tone": "signal", "suggestion": suggestion}
+
+
+def build_insight(data: PlannerData, outcome: Outcome, today: date) -> dict:
+    conf = confidence(data, outcome, today)
+    if not conf["ready"]:
+        return {**conf, "headline": None, "meanDelta": None, "tone": "building", "suggestion": None}
+    best = select_signal(candidate_signals(data, outcome, today))
+    if best is None:
+        first_block = outcome.block_ids[0] if outcome.block_ids else None
+        return {
+            **conf, "headline": "No clear pattern yet.", "meanDelta": None, "tone": "none",
+            "suggestion": {"action": "tweak", "blockId": first_block,
+                           "text": "No clear pattern yet — want to try moving a block "
+                                   "earlier and watch for another two weeks?"},
+        }
+    return {**conf, **phrase(best, outcome)}
