@@ -637,6 +637,7 @@ from core import (
     add_outcome, edit_outcome, remove_outcome, find_outcome,
     find_template_block_by_id, linked_blocks,
 )
+from core import set_outcome_rating
 
 
 def test_add_template_block_assigns_stable_id(data_dir: Path):
@@ -722,3 +723,28 @@ def test_linked_blocks_ignores_orphaned_ids(data_dir: Path):
     o = add_outcome(data, "x", "", "increase", block_ids=[b.id], created="2026-06-01")
     remove_template_block(data, b.start)         # block gone, link dangling
     assert linked_blocks(data, o) == []          # filtered at read
+
+
+def test_set_outcome_rating_upserts_one_per_day(data_dir: Path):
+    data = PlannerData()
+    o = add_outcome(data, "x", "", "increase", created="2026-06-01")
+    set_outcome_rating(data, "2026-06-02", o.id, 4, "2026-06-02T20:00:00")
+    set_outcome_rating(data, "2026-06-02", o.id, 2, "2026-06-02T21:00:00")  # overwrite
+    ci = data.days["2026-06-02"].outcome_checkins[o.id]
+    assert ci.rating == 2 and ci.at == "2026-06-02T21:00:00"
+
+
+@pytest.mark.parametrize("bad", [0, 6, -1, True])
+def test_set_outcome_rating_rejects_out_of_range(data_dir: Path, bad):
+    data = PlannerData()
+    o = add_outcome(data, "x", "", "increase", created="2026-06-01")
+    with pytest.raises(ValidationError):
+        set_outcome_rating(data, "2026-06-02", o.id, bad, "t")
+
+
+def test_set_outcome_rating_rejects_archived(data_dir: Path):
+    data = PlannerData()
+    o = add_outcome(data, "x", "", "increase", created="2026-06-01")
+    edit_outcome(data, o.id, status="archived")
+    with pytest.raises(ValidationError):
+        set_outcome_rating(data, "2026-06-02", o.id, 3, "t")

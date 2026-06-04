@@ -572,6 +572,20 @@ def edit_outcome(
     return outcome
 
 
+def set_outcome_rating(
+    data: PlannerData, date_iso: str, outcome_id: str, rating: int, at: str,
+) -> OutcomeCheckin:
+    outcome = find_outcome(data, outcome_id)
+    if outcome is None:
+        raise ValidationError(f"no outcome {outcome_id!r}")
+    if outcome.status != "active":
+        raise ValidationError("cannot rate an archived outcome")
+    validate_rating(rating)
+    checkin = OutcomeCheckin(rating=rating, at=at)
+    data.days.setdefault(date_iso, Day()).outcome_checkins[outcome_id] = checkin
+    return checkin
+
+
 def remove_outcome(data: PlannerData, outcome_id: str) -> bool:
     outcome = find_outcome(data, outcome_id)
     if outcome is None:
