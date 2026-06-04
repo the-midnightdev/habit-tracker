@@ -633,6 +633,10 @@ def test_active_block_end_is_exclusive():
 
 
 from core import Outcome, OutcomeCheckin
+from core import (
+    add_outcome, edit_outcome, remove_outcome, find_outcome,
+    find_template_block_by_id, linked_blocks,
+)
 
 
 def test_add_template_block_assigns_stable_id(data_dir: Path):
@@ -666,3 +670,55 @@ def test_outcomes_and_checkins_round_trip(data_dir: Path):
     )
     DataStore(data_dir).save(data)
     assert DataStore(data_dir).load() == data
+
+
+def _seed_block(data, start="08:00", end="09:00", label="walk"):
+    return add_template_block(data, start, end, label)
+
+
+def test_add_outcome_links_existing_block(data_dir: Path):
+    data = PlannerData()
+    b = _seed_block(data)
+    o = add_outcome(data, "More energy", "", "increase",
+                    block_ids=[b.id], created="2026-06-01")
+    assert find_outcome(data, o.id) is o
+    assert [lb.id for lb in linked_blocks(data, o)] == [b.id]
+
+
+def test_add_outcome_rejects_unknown_block(data_dir: Path):
+    data = PlannerData()
+    with pytest.raises(ValidationError):
+        add_outcome(data, "x", "", "increase", block_ids=["nope"], created="2026-06-01")
+
+
+def test_add_outcome_rejects_bad_direction(data_dir: Path):
+    data = PlannerData()
+    with pytest.raises(ValidationError):
+        add_outcome(data, "x", "", "sideways", created="2026-06-01")
+
+
+def test_edit_outcome_archives_and_relinks(data_dir: Path):
+    data = PlannerData()
+    b = _seed_block(data)
+    o = add_outcome(data, "x", "", "increase", created="2026-06-01")
+    edit_outcome(data, o.id, status="archived", block_ids=[b.id])
+    assert o.status == "archived"
+    assert o.block_ids == [b.id]
+
+
+def test_remove_outcome_drops_it_and_its_checkins(data_dir: Path):
+    data = PlannerData()
+    o = add_outcome(data, "x", "", "increase", created="2026-06-01")
+    data.days["2026-06-02"] = Day(
+        outcome_checkins={o.id: OutcomeCheckin(rating=3, at="t")})
+    assert remove_outcome(data, o.id) is True
+    assert find_outcome(data, o.id) is None
+    assert "2026-06-02" not in data.days  # pruned: day had only that checkin
+
+
+def test_linked_blocks_ignores_orphaned_ids(data_dir: Path):
+    data = PlannerData()
+    b = _seed_block(data)
+    o = add_outcome(data, "x", "", "increase", block_ids=[b.id], created="2026-06-01")
+    remove_template_block(data, b.start)         # block gone, link dangling
+    assert linked_blocks(data, o) == []          # filtered at read

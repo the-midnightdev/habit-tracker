@@ -481,6 +481,111 @@ def _min_of(hm: str) -> int:
     return int(h) * 60 + int(m)
 
 
+DIRECTIONS = ("increase", "decrease")
+OUTCOME_STATUSES = ("active", "archived")
+
+
+def validate_direction(direction: str) -> None:
+    if direction not in DIRECTIONS:
+        raise ValidationError(f"unknown direction {direction!r}; expected one of {DIRECTIONS}")
+
+
+def validate_outcome_status(status: str) -> None:
+    if status not in OUTCOME_STATUSES:
+        raise ValidationError(f"unknown status {status!r}; expected one of {OUTCOME_STATUSES}")
+
+
+def validate_rating(rating: int) -> None:
+    if not isinstance(rating, int) or isinstance(rating, bool) or not (1 <= rating <= 5):
+        raise ValidationError(f"rating must be an integer 1..5, got {rating!r}")
+
+
+def find_outcome(data: PlannerData, outcome_id: str) -> Outcome | None:
+    for o in data.outcomes:
+        if o.id == outcome_id:
+            return o
+    return None
+
+
+def find_template_block_by_id(data: PlannerData, block_id: str) -> TemplateBlock | None:
+    for b in data.template:
+        if b.id == block_id:
+            return b
+    return None
+
+
+def _validate_block_ids(data: PlannerData, block_ids: list[str]) -> None:
+    for bid in block_ids:
+        if find_template_block_by_id(data, bid) is None:
+            raise ValidationError(f"no template block with id {bid!r}")
+
+
+def linked_blocks(data: PlannerData, outcome: Outcome) -> list[TemplateBlock]:
+    """Template blocks linked to this outcome; dangling ids are filtered out."""
+    wanted = set(outcome.block_ids)
+    return [b for b in data.template if b.id in wanted]
+
+
+def add_outcome(
+    data: PlannerData, name: str, description: str, direction: str,
+    *, block_ids: list[str] | tuple[str, ...] = (), created: str,
+) -> Outcome:
+    name = name.strip()
+    if not name:
+        raise ValidationError("outcome name must not be empty")
+    validate_direction(direction)
+    ids = list(block_ids)
+    _validate_block_ids(data, ids)
+    outcome = Outcome(
+        id=uuid.uuid4().hex, name=name, description=description.strip(),
+        direction=direction, created=created, status="active", block_ids=ids,
+    )
+    data.outcomes.append(outcome)
+    return outcome
+
+
+def edit_outcome(
+    data: PlannerData, outcome_id: str, *,
+    name: str | None = None, description: str | None = None,
+    direction: str | None = None, status: str | None = None,
+    block_ids: list[str] | None = None,
+) -> Outcome:
+    outcome = find_outcome(data, outcome_id)
+    if outcome is None:
+        raise ValidationError(f"no outcome {outcome_id!r}")
+    if name is not None:
+        name = name.strip()
+        if not name:
+            raise ValidationError("outcome name must not be empty")
+        outcome.name = name
+    if description is not None:
+        outcome.description = description.strip()
+    if direction is not None:
+        validate_direction(direction)
+        outcome.direction = direction
+    if status is not None:
+        validate_outcome_status(status)
+        outcome.status = status
+    if block_ids is not None:
+        _validate_block_ids(data, block_ids)
+        outcome.block_ids = list(block_ids)
+    return outcome
+
+
+def remove_outcome(data: PlannerData, outcome_id: str) -> bool:
+    outcome = find_outcome(data, outcome_id)
+    if outcome is None:
+        return False
+    data.outcomes.remove(outcome)
+    for date_iso in list(data.days):
+        day = data.days[date_iso]
+        if outcome_id in day.outcome_checkins:
+            del day.outcome_checkins[outcome_id]
+            if not day.overrides and not day.notes and not day.outcome_checkins:
+                data.days.pop(date_iso, None)
+    return True
+
+
 def active_block(blocks: list[DayBlock], now_min: int) -> DayBlock | None:
     """The block to prompt for at now_min: the first non-done block whose
     half-open interval [start, end) contains now_min. None if nothing is active.
