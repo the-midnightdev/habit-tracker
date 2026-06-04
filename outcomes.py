@@ -86,7 +86,8 @@ def confidence(data: PlannerData, outcome: Outcome, today: date) -> dict:
 
 @dataclass
 class Signal:
-    kind: str            # block_daily | late_end_daily | block_weekly | morning_weekly
+    kind: str            # block_daily | late_end_daily | duration_daily | dow_daily
+                         # | block_weekly | morning_weekly | afternoon_weekly | evening_weekly
     label: str
     lag: int
     threshold: float     # group-split boundary used for phrasing
