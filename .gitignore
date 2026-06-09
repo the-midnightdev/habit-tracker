@@ -7,3 +7,6 @@ build/
 .superpowers/
 .vite/
 graphify-out/
+.claude
+.venv
+
